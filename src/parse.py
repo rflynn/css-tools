@@ -1,6 +1,13 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 
+#
+# FIXME: LEPL is very powerful but its tokenstream is fucked;
+#	i want to mix Literals and Tokens,
+#	I want to be able to backtrack ALWAYS, etc.
+# investigate other parsers
+#
+
 """
 CSS Parser and evaluator
 """
@@ -73,9 +80,9 @@ class Ruleset(List): pass
 
 # Ref: http://www.w3.org/TR/CSS2/syndata.html#syntax
 
-commentbody = Token('[^\*]+') | Token('[\*]')
-# 'b' so matching '*' in */ will backtrack
-comment = ~Token('/\*') & commentbody[::,...] & ~Token('\*/') > Comment
+# 'b' = non-greedy, '...' == backtrack
+comment = ~Token('/\*') & (Token('[^\*]+') | Token('\*'))[::'b',...] & ~Token('\*/') > Comment
+#comment = Token('/\*') & ((Token('.') | Token('[a-zA-Z0-9_]+'))[::'b',...]) & ~Token('\*/') > Comment
 
 CDO = Token('<!--')
 CDC = Token('-->')
@@ -146,15 +153,17 @@ with DroppedSpace(S[:]):
 	block += ~SYMBOL('{') & declarations & ~SYMBOL('}')
 	ruleset = (Optional(selectors) & block & ~Optional(S)) > Ruleset
 	at_rule = (ATKEYWORD & ~Optional(S) & Optional(any) & (block | Token(';') & ~Optional(S))) > AtRule
-toplevel = ruleset # comment and ruleset both work great, except together. why?!
+toplevel = ruleset | comment
 stylesheet = toplevel[:]
 
 for s in [
-		#'h1.big-text{a:b; c:1; d:100%; e:5px; f:string_doesnt_work; g:url(); h:#hash; border-width: -1px 2px 3px 4px;u:u+0;u2:u+012345-67890a;}',
-		#'/**/',
-		#'/* */',
-		#'/***/',
-		#'/****/',
+		'h1.big-text{a:b; c:1; d:100%; e:5px; f:string_doesnt_work; g:url(); h:#hash; border-width: -1px 2px 3px 4px;u:u+0;u2:u+012345-67890a;}',
+		'',
+		'/**/',
+		'/* */',
+		'/***/',
+		'/****/',
+		'/*** ROUNDED CORNERS (CSS 2.0) ***/',
 		'h1,h2{x:y}',
 		'*.foo{x:y}',
 		'a:link{a:b}',
@@ -169,7 +178,7 @@ for s in [
 		'a{font:normal 1px/2em Arial;}',
 		'a{font:normal 1px/2.0em Arial;}',
 		#'@import;',
-		#sys.stdin.read()
+		sys.stdin.read()
 		]:
 	try:
 		ast = stylesheet.parse(s)
