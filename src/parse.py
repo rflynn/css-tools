@@ -64,7 +64,8 @@ property := name
 values   := value,(s?,value)*,s?
 value    := any/block
 any      := percent/dim/num/expr/uri/ident/string/hash/inc/bareq/delim
-string   := '"',[^"]*,'"'
+string   := '"',chars,'"'
+chars    := -'"'*
 percent  := num,'%'
 dim      := (num,ident),('/',num,ident)*
 uri      := url
@@ -288,22 +289,15 @@ class Value:
 			print 'ast=', ast
 			raise Exception('unsupported')
 		x = v.child[0]
-		if x.tag == 'ident':
-			return Ident(x)
-		elif x.tag == 'num':
-			return Number(x)
-		elif x.tag == 'percent':
-			return Percent(x)
-		elif x.tag == 'hash':
-			return Hash(x)
-		elif x.tag == 'dim':
-			return Dimension(x)
-		elif x.tag == 'delim':
-			return Delim(x)
-		elif x.tag == 'expr':
-			return Expression(x)
-		elif x.tag == 'uri':
-			return Uri(x)
+		if x.tag == 'ident':	return Ident(x)
+		elif x.tag == 'num':	return Number(x)
+		elif x.tag == 'percent':return Percent(x)
+		elif x.tag == 'string':	return String(x)
+		elif x.tag == 'hash':	return Hash(x)
+		elif x.tag == 'dim':	return Dimension(x)
+		elif x.tag == 'delim':	return Delim(x)
+		elif x.tag == 'expr':	return Expression(x)
+		elif x.tag == 'uri':	return Uri(x)
 		print 'Value.make.x=', x
 		assert False
 		return ast
@@ -393,12 +387,17 @@ CSS_TESTS = [
 	"{;}",
 	'* html{}',
 	'html .jqmWindow{}',
+	"""#under_scores a{color:#000;}""",
 	#'a,b{c:d;e:f}',
 	'a b.c{d:e}',
 	#'*.b.c.d{c:d}',
 	#'a{b:c}d{e:f}',
 	'a{b:c}\r\nd{e:f}',
 	"{hash:#333}",
+	"""{string:""}""",
+	"""{empty-url:url()}""",
+	"""{a-url:url(a)}""",
+	"""{foo-url:url(http://foo)}""",
 	#'h1,h2{font-family:Arial,Heletica,sans-serif}',
 	'body{background-position:center 118px !important;font:normal 13px/1.2em Arial, Helvetica, sans-serif;margin:0;padding:0;}',
 	'a:hover{text-decoration:underline;}', # psuedo class
@@ -421,11 +420,6 @@ CSS_TESTS = [
 	"""{foo:expression(funcall(2+2)+'');}""",
 	"""{foo:expression((a||b)+Math.round(1*(c||d)/1)+'e');}""",
 	"""#foo .bar a,#baz .closeb a{background-color:inherit;color:#fff;}""",
-	"""#under_scores a{color:#000;}""",
-	"""{empty-url:url()}""",
-	"""{a-url:url(a)}""",
-	"""{foo-url:url(http://foo)}""",
-	"""""",
 ]
 
 # read from stdin if it's available
