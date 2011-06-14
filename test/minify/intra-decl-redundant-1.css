@@ -1,0 +1,9 @@
+/* before */
+h1 {
+	font-size: 10px;
+	font-size: 10px;
+}
+/* after */
+h1 {
+	font-size: 10px;
+}

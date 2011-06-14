@@ -7,7 +7,7 @@ Upcoming toolkit will consist of:
 	css-format
 		css-pretty-print
 		css-minify
-	css-hint
+	css-refactor
 
 Dependencies:
 	sudo easy_install simpleparse
