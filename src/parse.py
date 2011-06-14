@@ -70,8 +70,7 @@ dim      := (num,ident),('/',num,ident)*
 hash     := '#',hex+
 uri      := url
 url      := ('url(',urlchars,')')
-urlchars := urlchar*
-urlchar  := [a-zA-Z0-9~`!@#$%^&*_+{}[|:,./?-]
+urlchars := [a-zA-Z0-9~`!@#$%^&*_+{}[|:,./?-]*
 # FIXME: can't get character class hex escape ranges to work...
 #urlchar  := [\x09\x21\x23-\x26\x27-\x7E] / nonascii / escape
 filter   := filtername, space?, '(', space?, filterkvs?, space?, ')'
@@ -185,7 +184,7 @@ class Whitespace:
 class Sels:
 	def __init__(self, ast):
 		print 'Sels ast=', ast
-		self.sel = map(Sel, ast.child)
+		self.sel = map(Sel, filter_space(ast.child))
 	def __repr__(self):
 		return 'Sels(' + ','.join(map(str,self.sel)) + ')'
 	def format(self):
@@ -275,7 +274,11 @@ class Sel_Op:
 class Decls:
 	def __init__(self, ast):
 		print 'Decls ast=', ast
-		self.decl = map(Decl, ast.child[0].child)
+		decls = list(filter_space(ast.child))[0].child
+		print 'Decls decls=', decls
+		nospace = filter_space(decls)
+		print 'Decls nospace=', nospace
+		self.decl = map(Decl, nospace)
 	def __repr__(self):
 		return 'Decls(' + ','.join(map(str,self.decl)) + ')'
 	def format(self, indent_level=0):
@@ -287,7 +290,8 @@ class Decls:
 class Decl:
 	def __init__(self, ast):
 		print 'Decl ast=', ast
-		prop,vals = ast.child
+		nospace = list(filter_space(ast.child))
+		prop,vals = nospace
 		self.property = prop.str
 		self.values = map(Value, filter_space(vals.child))
 	def __repr__(self):
