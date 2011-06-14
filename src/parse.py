@@ -51,33 +51,42 @@ sel      := sel_tagop, (s?, sel_tagop)*
 sel_tagop:= (sel_tag, sel_op?) / (sel_tag?, sel_op)
 sel_tag  := ident/sel_univ
 sel_univ := '*'
-sel_op   := sel_class/sel_id/sel_psuedo/sel_child/sel_adj
+sel_op   := sel_class/sel_id/sel_psuedo/sel_child/sel_adj/sel_attr
 sel_class:= '.',sel_tag
 sel_id   := '#',sel_tag
 sel_psuedo:=':',sel_tag
 sel_child:= '>',sel_tag
 sel_adj  := '+',sel_tag
+sel_attr := '[',sel_tag,']'
 block    := '{',s?,decls,s?,'}'
 decls    := decl?,(s?,';',s?,decl)*,s?,';'?
 decl     := property,s?,':',s?,values
 property := name
 values   := value,(s?,value)*,s?
 value    := any/block
-any      := percent/dim/num/expr/uri/ident/string/hash/inc/bareq/delim
-string   := '"',chars,'"'
-chars    := -'"'*
+any      := percent/dim/hash/expr/uri/string/filter/ident/num/inc/bareq/delim
 percent  := num,'%'
 dim      := (num,ident),('/',num,ident)*
+hash     := '#',hex+
 uri      := url
 url      := ('url(',urlchars,')')
 urlchars := urlchar*
 urlchar  := [a-zA-Z0-9~`!@#$%^&*_+{}[|:,./?-]
 # FIXME: can't get character class hex escape ranges to work...
 #urlchar  := [\x09\x21\x23-\x26\x27-\x7E] / nonascii / escape
-hash     := '#',hex+
+filter   := filtername, space?, '(', space?, filterkvs?, space?, ')'
+filtername:= name, (':', name)*, ('.', name)*
+filterkvs:= filterkvs2
+filterkvs2:= filterkv, (space?, ',', space?, filterkv)*
+filterkv := name, '=', sqstring
+sqstring := "'", sqchars, "'"
+sqchars  := -"'"*
+string   := '"',chars,'"'
+chars    := -'"'*
 inc      := '=~'
 bareq    := '|='
-ident    := [-]?,name
+ident    := ident2
+ident2   := [-]?,name
 nonascii := [\x80-\xD7FF\xE000-\xFFFD\x10000-\x10FFFF]
 escape   := unicode / ('\\', [\x20-\x7E\x80-\xD7FF\xE000-\xFFFD\x10000-\x10FFFF])
 unicode  := '\\', hex, hex?, hex?, hex?, hex?, hex?, wc?
@@ -238,12 +247,12 @@ class Sel_Op:
 		c = ast.child[0]
 		self.tag = c.tag
 		print 'Sel_Op tag=', self.tag
-		self.operator = {
-				'sel_class'  : '.',
-				'sel_id'     : '#',
-				'sel_psuedo' : ':',
-				'sel_child'  : '>',
-				'sel_adj'    : '+' }[self.tag]
+		self.operator = { 'sel_class'  : '.',
+				  'sel_id'     : '#',
+				  'sel_psuedo' : ':',
+				  'sel_child'  : '>',
+				  'sel_adj'    : '+',
+				  'sel_attr'   : '[' }[self.tag]
 		self.operand = c.child[0].child[0].child[0].str
 	def __repr__(self):
 		return 'Sel_Op(%s%s)' % (self.operator, self.operand)
@@ -298,6 +307,7 @@ class Value:
 		elif x.tag == 'delim':	return Delim(x)
 		elif x.tag == 'expr':	return Expression(x)
 		elif x.tag == 'uri':	return Uri(x)
+		elif x.tag == 'filter':	return Filter(x)
 		print 'Value.make.x=', x
 		assert False
 		return ast
@@ -376,6 +386,14 @@ class Uri:
 	def format(self):
 		return self.s
 
+class Filter:
+	def __init__(self, ast):
+		self.s = ast.str
+	def __repr__(self):
+		return 'Filter(%s)' % (self.s,)
+	def format(self):
+		return self.s
+
 parser = Parser(CSS_EBNF)
 
 CSS_TESTS = [
@@ -420,6 +438,13 @@ CSS_TESTS = [
 	"""{foo:expression(funcall(2+2)+'');}""",
 	"""{foo:expression((a||b)+Math.round(1*(c||d)/1)+'e');}""",
 	"""#foo .bar a,#baz .closeb a{background-color:inherit;color:#fff;}""",
+	"""-sh-linkedin .-sh-but a{}""",
+	""".-sh-iwiw .-sh-but a{background-position:-112px -48px;}""",
+	"""#selector_attributes .title[class] h3,#foo #Bar #baz .title[class] h3{background:url(http://image.png) no-repeat;}""",
+	"""{filter:progid()}""",
+	"""filter-yay{filter:progid:DXImageTransform.Microsoft.AlphaImageLoader()}""",
+	"""filter-yay{filter:progid:DXImageTransform.Microsoft.AlphaImageLoader(enabled='true')}""",
+	"""filter-yay{filter:progid:DXImageTransform.Microsoft.AlphaImageLoader(enabled='true', sizingMethod='img',src='http://image.jpg')}""",
 ]
 
 # read from stdin if it's available
