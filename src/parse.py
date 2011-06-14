@@ -38,13 +38,15 @@ class AstNode:
 				AstNode.make(child, s) if child else [])
 			nodes.append(n)
 		return nodes 
+	@staticmethod
+	def Empty():
+		return AstNode('','',0,0,[])
 
 CSS_EBNF = r'''
 css      := toplevel*
 toplevel := rule/s
 rule     := sels?,block
 sels     := sel,(s?,',',s?,sel)*,s?
-# sel is a chain: a b.c > .d + e
 sel      := sel_tagop, (s?, sel_tagop)*
 sel_tagop:= (sel_tag, sel_op?) / (sel_tag?, sel_op)
 sel_tag  := ident/sel_univ
@@ -61,20 +63,28 @@ decl     := property,s?,':',s?,values
 property := name
 values   := value,(s?,value)*,s?
 value    := any/block
-any      := percent/dim/num/expr/ident/string/uri/hash/inc/bareq/delim
+any      := percent/dim/num/expr/uri/ident/string/hash/inc/bareq/delim
 string   := '"',[^"]*,'"'
 percent  := num,'%'
 dim      := (num,ident),('/',num,ident)*
-uri      := 'url(',[^)]*,')'
+uri      := url
+url      := ('url(',urlchars,')')
+urlchars := urlchar*
+urlchar  := [a-zA-Z0-9~`!@#$%^&*_+{}[|:,./?-]
+# FIXME: can't get character class hex escape ranges to work...
+#urlchar  := [\x09\x21\x23-\x26\x27-\x7E] / nonascii / escape
 hash     := '#',hex+
 inc      := '=~'
 bareq    := '|='
 ident    := [-]?,name
+nonascii := [\x80-\xD7FF\xE000-\xFFFD\x10000-\x10FFFF]
+escape   := unicode / ('\\', [\x20-\x7E\x80-\xD7FF\xE000-\xFFFD\x10000-\x10FFFF])
+unicode  := '\\', hex, hex?, hex?, hex?, hex?, hex?, wc?
+wc       := [\x9\xA\xC\xD\x20]
 num      := number
 number   := [-]?,[0-9]+,('.',[0-9]+)?
 delim    := delimiter
 delimiter:= '!'/','
-# FIXME: need to be able to parse Javascript, of course...
 expr     := 'expression(', space?, exprexpr?, space?, ')'
 exprexpr := exprterm, (space?, exprop)*
 exprop   := exprbinop, space?, exprexpr
@@ -85,7 +95,7 @@ exprstr  := "'", -"'"*, "'"
 exprbinop:= '+' / '-' / '*' / '/' / '||' / '&&'
 exprsinop:= '+' / '-'
 exprparen:= '(', space?, exprexpr, space?, ')'
-name     := [a-zA-Z-],[a-zA-Z0-9-]*
+name     := [a-zA-Z_-],[a-zA-Z0-9_-]*
 hex      := [0-9a-fA-F]
 s        := space/comment
 space    := [ \t\r\n\v\f]+
@@ -172,7 +182,8 @@ class Sels:
 		return ', '.join(s.format() for s in self.sel)
 	@staticmethod
 	def Empty():
-		return Sels(AstNode('','',0,0,[]))
+		# fudge an empty Sels
+		return Sels(AstNode.Empty())
 
 class Sel:
 	def __init__(self, ast):
@@ -188,7 +199,7 @@ class Sel:
 			return Sel_Tags(skip_tagop)
 		return Sel_Ops(ast)
 	def format(self):
-		return ''.join(s.format() for s in self.sel)
+		return ' '.join(s.format() for s in self.sel)
 
 # strip whitespace and comments
 def filter_space(l): return filter(lambda c: c.tag not in ('s','comment'), l)
@@ -291,6 +302,8 @@ class Value:
 			return Delim(x)
 		elif x.tag == 'expr':
 			return Expression(x)
+		elif x.tag == 'uri':
+			return Uri(x)
 		print 'Value.make.x=', x
 		assert False
 		return ast
@@ -361,6 +374,14 @@ class Expression:
 	def format(self):
 		return self.s
 
+class Uri:
+	def __init__(self, ast):
+		self.s = ast.str
+	def __repr__(self):
+		return 'Uri(%s)' % (self.s,)
+	def format(self):
+		return self.s
+
 parser = Parser(CSS_EBNF)
 
 CSS_TESTS = [
@@ -402,6 +423,13 @@ CSS_TESTS = [
 	"""{foo:expression((a||b)+Math.round(1*(c||d)/1)+'e');}""",
 	"""* html .jqmWindow{top:expression((document.documentElement.scrollTop || document.body.scrollTop) + Math.round(30 * (document.documentElement.offsetHeight || document.body.clientHeight) / 100) + 'px');}""",
 	"""#reggreeting .closeb a,#ttvpopmessage .closeb a{background-color:inherit;color:#fff;}""",
+	"""#ka_login_container a{color:#000;}""",
+	"""{empty-url:url()}""",
+	"""{a-url:url(a)}""",
+	"""{foo-url:url(http://foo)}""",
+	"""
+.ka_rate{background:transparent url(http://i.cdn.turner.com/trutv/trutv.com/graphics/community/ka/starBg.jpg) no-repeat scroll 0 0;float:left;width:116px;margin:0;padding:0px;}
+""",
 ]
 
 # read from stdin if it's available
