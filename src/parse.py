@@ -7,104 +7,390 @@ CSS parser
 
 from simpleparse.common import numbers, strings, comments
 from simpleparse.parser import Parser
+from sys import stdin
+import fcntl, os
 
 class AstNode:
-	def __init__(self, s, tag, start, end, children):
+	def __init__(self, s, tag, start, end, child):
 		self.tag = tag
 		self.start = start
 		self.end = end
 		self.str = s[start:end]
-		self.children = children
+		self.child = child
 	def __str__(self):
-		if self.children:
-			return '%s(%s)' % (self.tag, str(self.children))
+		if self.child:
+			return '%s(%s)' % (self.tag, str(self.child))
 		else:
 			return self.str
 	def __repr__(self): return str(self)
 	def dump(self, indent=0):
 		ins = ' ' * indent
-		if self.children:
+		if self.child:
 			return ins + '%s:\n' % (self.tag,) + \
-				''.join([c.dump(indent+1) for c in self.children])
+				''.join([c.dump(indent+1) for c in self.child])
 		else:
 			return ins + self.str + '\n'
 	@staticmethod
 	def make(matches, s):
 		nodes = []
-		for tag, start, end, children in matches:
-			if tag not in ('s',):
-				n = AstNode(s, tag, start, end,
-					AstNode.make(children, s) if children else [])
-				nodes.append(n)
+		for tag, start, end, child in matches:
+			n = AstNode(s, tag, start, end,
+				AstNode.make(child, s) if child else [])
+			nodes.append(n)
 		return nodes 
 
 CSS_EBNF = r'''
 css      := toplevel*
 toplevel := rule/s
 rule     := sels?,block
-block    := '{',s?,decls,s?,'}'
 sels     := sel,(s?,',',s?,sel)*,s?
+sel      := sel_tags?,sel_ops?
+sel_tags := sel_tag,(s,sel_tag)*
+sel_tag  := '*'/ident
+sel_ops  := sel_op,(s?,sel_op)*
+sel_op   := sel_class/sel_id/sel_psuedo/sel_child/sel_adj
+sel_class:= '.',sel_tag
+sel_id   := '#',sel_tag
+sel_psuedo:=':',sel_tag
+sel_child:= '>',sel_tag
+sel_adj  := '+',sel_tag
+block    := '{',s?,decls,s?,'}'
 decls    := decl?,(s?,';',s?,decl)*,s?,';'?
 decl     := property,s?,':',s?,values
 property := name
 values   := value,(s?,value)*,s?
 value    := any/block
-any      := string/percent/dim/uri/hash/inc/bareq/ident/num/delim
+any      := percent/dim/num/expr/ident/string/uri/hash/inc/bareq/delim
 string   := '"',[^"]*,'"'
 percent  := num,'%'
 dim      := (num,ident),('/',num,ident)*
 uri      := 'url(',[^)]*,')'
-hash     := '#',name
+hash     := '#',hex+
 inc      := '=~'
 bareq    := '|='
 ident    := [-]?,name
-num      := [0-9]+,([.],[0-9]+)?
-delim    := '!'/','
+num      := number
+number   := [-]?,[0-9]+,('.',[0-9]+)?
+delim    := delimiter
+delimiter:= '!'/','
+# FIXME: need to be able to parse Javascript, of course...
+expr     := 'expression(', exprexpr?, ')'
+exprexpr := exprop / exprterm / exprparen
+exprop   := exprterm, exprbinop, exprexpr
+exprterm := num / exprident / exprstr
+exprident:= name, ('.', name)*
+exprstr  := "'", -"'"*, "'"
+exprbinop:= '+' / '-' / '*' / '/' / '||' / '&&'
+exprsinop:= '+' / '-'
+exprparen:= '(', space?, exprexpr, space?, ')'
 name     := [a-zA-Z-],[a-zA-Z0-9-]*
-sel      := sel_tags,sel_ops?
-sel_tags := sel_tag,(s,sel_tag)*
-sel_tag  := '*'/ident
-sel_ops  := sel_child/sel_adj
-sel_child:= '>',sel_tags
-sel_adj  := '+',sel_tags
-s        := whitespace/comment
+hex      := [0-9a-fA-F]
+s        := space/comment
 space    := [ \t\r\n\v\f]+
-comment  := '/*','*/'
+comment  := '/*', commtext, '*/'
+commtext := -"*/"*
 '''
 
-class Rule(AstNode):
+class Format:
+	"""Options for CSS formatting"""
+	IndentChar = '\t'
+	IndentSize = 1
+	Indent = IndentChar * IndentSize
+	class Spec:
+		OpSpace = True
+	class Block:
+		Indent = True
+	class Decl:
+		class Property:
+			LeadingSpace = True
+		class Value:
+			LeadingSpace = False
+		LastSemi = False
+
+class TopLevel:
+	def __init__(self, ast):
+		self.ast = ast
+		self.contents = TopLevel.make(ast)
+	def __repr__(self):
+		return str(self.contents)
+	@staticmethod
+	def make(ast):
+		if ast.tag == 'rule':
+			return Rule(ast)
+		elif ast.tag == 's':
+			if ast.child[0].child:
+				return Comment(ast)
+			else:
+				return Whitespace(ast)
+	def format(self):
+		return self.contents.format()
+
+class Rule:
+	def __init__(self, ast):
+		sels,decls = ast.child
+		self.sels = Sels(sels)
+		self.decls = Decls(decls)
+	def __repr__(self):
+		return 'Rule(%s,%s)' % (self.sels, self.decls)
+	def format(self):
+		return self.sels.format() + ' ' + self.decls.format(1)
+
+class Comment:
+	def __init__(self, ast):
+		self.ast = ast
+		c = ast.child[0]
+		self.text = c.child[0].str if c.child else ''
+	def __repr__(self):
+		return 'Comment(%s)' % (self.text,)
+	def format(self):
+		return '/*%s*/' % (self.text,)
+
+class Whitespace:
 	def __init__(self, ast):
 		self.ast = ast
 	def __repr__(self):
-		return 'Rules:' + ''.join(map(str,self.ast.children))
+		return self.ast.child[0].str
+	def format(self):
+		return str(self)
+
+class Sels:
+	def __init__(self, ast):
+		self.sel = map(Sel, ast.child)
+	def __repr__(self):
+		return 'Sels(' + ','.join(map(str,self.sel)) + ')'
+	def format(self):
+		return ', '.join(s.format() for s in self.sel)
+
+class Sel:
+	def __init__(self, ast):
+		self.sel = map(Sel.make, ast.child)
+	def __repr__(self):
+		return 'Sel(' + ','.join(map(str,self.sel)) + ')'
+	@staticmethod
+	def make(ast):
+		if ast.tag == 'sel_tags':
+			return Sel_Tags(ast)
+		return Sel_Ops(ast)
+	def format(self):
+		return ''.join(s.format() for s in self.sel)
+
+# strip whitespace and comments
+def filter_space(l): return filter(lambda c: c.tag not in ('s','comment'), l)
+
+class Sel_Tags:
+	def __init__(self, ast):
+		# save tag idents, strip spaces/comments
+		print 'Sel_Tags=', ast.child
+		self.tags = map(Ident, (c.child[0] for c in filter_space(ast.child)))
+	def __repr__(self):
+		return 'Sel_Tags(' + str(self.tags) + ')'
+	def format(self):
+		return ' '.join(t.format() for t in self.tags)
+
+class Sel_Ops:
+	def __init__(self, ast):
+		self.ast = ast
+		self.op = map(Sel_Op, ast.child)
+	def __repr__(self):
+		return 'Sel_Ops(' + str(self.op) + ')'
+	def format(self):
+		return ', '.join(o.format() for o in self.op)
+
+class Sel_Op:
+	def __init__(self, ast):
+		self.ast = ast
+		c = ast.child[0]
+		self.tag = c.tag
+		self.operator = {
+				'sel_class'  : '.',
+				'sel_id'     : '#',
+				'sel_psuedo' : ':',
+				'sel_child'  : '>',
+				'sel_adj'    : '+' }[c.tag]
+		self.operand = c.child[0].child[0].child[0].str
+	def __repr__(self):
+		return 'Sel_Op(%s%s)' % (self.operator, self.operand)
+	def format(self):
+		return self.operator + ('' if self.operator in ('.','#',':') else ' ') + self.operand
+
+class Decls:
+	def __init__(self, ast):
+		self.decl = map(Decl, ast.child[0].child)
+	def __repr__(self):
+		return 'Decls(' + ','.join(map(str,self.decl)) + ')'
+	def format(self, indent_level=0):
+		return '{' + \
+			'; '.join(d.format(indent_level) for d in self.decl) + \
+			(';' if Format.Decl.LastSemi else '') + \
+			'}'
+
+class Decl:
+	def __init__(self, ast):
+		prop,vals = ast.child
+		self.property = prop.str
+		self.values = map(Value, filter_space(vals.child))
+	def __repr__(self):
+		return 'Decl(%s:%s)' % (self.property, self.values)
+	def format(self, indent_level):
+		return self.property + ':' + \
+			(' ' if Format.Decl.Value.LeadingSpace else '') + \
+			' '.join(v.format() for v in self.values)
+
+class Value:
+	def __init__(self, ast):
+		self.v = Value.make(ast)
+	def __repr__(self):
+		return 'Value(%s)' % (self.v,)
+	def format(self):
+		return self.v.format()
+	@staticmethod
+	def make(ast):
+		v = ast.child[0]
+		if v.tag != 'any':
+			print 'ast=', ast
+			raise Exception('unsupported')
+		x = v.child[0]
+		if x.tag == 'ident':
+			return Ident(x)
+		elif x.tag == 'num':
+			return Number(x)
+		elif x.tag == 'percent':
+			return Percent(x)
+		elif x.tag == 'hash':
+			return Hash(x)
+		elif x.tag == 'dim':
+			return Dimension(x)
+		elif x.tag == 'delim':
+			return Delim(x)
+		elif x.tag == 'expr':
+			return Expression(x)
+		print 'Value.make.x=', x
+		assert False
+		return ast
+
+class Ident:
+	def __init__(self, ast):
+		self.s = ast.child[0].str
+	def __repr__(self):
+		return 'Ident(%s)' % (self.s,)
+	def format(self):
+		return self.s
+
+class Number:
+	def __init__(self, ast):
+		self.s = ast.child[0].str
+		self.f = float(self.s)
+	def __repr__(self):
+		return 'Num(%s)' % (self.s,)
+	def format(self):
+		return self.s
+
+class Percent:
+	def __init__(self, ast):
+		self.s = ast.child[0].str
+		self.f = float(self.s)
+	def __repr__(self):
+		return 'Percent(%s%%)' % (self.s,)
+	def format(self):
+		return self.s + '%'
+
+class Dimension:
+	def __init__(self, ast):
+		self.ast = ast
+	def __repr__(self):
+		return 'Dimension(%s)' % (self.ast,)
+	def format(self):
+		return str(self.ast)
+
+class String:
+	def __init__(self, ast):
+		self.s = ast.child[0].str
+	def __repr__(self):
+		return self.s
+	def format(self):
+		return self.s
+
+class Delim:
+	def __init__(self, ast):
+		self.s = ast.str
+	def __repr__(self):
+		return 'Delim(%s)' % (self.s,)
+	def format(self):
+		return self.s
+
+class Hash:
+	def __init__(self, ast):
+		self.s = ast.str
+	def __repr__(self):
+		return 'Hash(%s)' % (self.s,)
+	def format(self):
+		return self.s
+
+class Expression:
+	def __init__(self, ast):
+		self.s = ast.str
+	def __repr__(self):
+		return 'Expression(%s)' % (self.s,)
+	def format(self):
+		return self.s
 
 parser = Parser(CSS_EBNF)
 
 CSS_TESTS = [
-	#'/**/',
-	#'/***/',
-	#'/* */',
-	'a,b{c:d;e:f}',
+	'/**/',
+	'/***/',
+	'/****/',
+	'/*/*/',
+	"{}",
+	"{;}",
+	#'a,b{c:d;e:f}',
+	'a b.c{d:e}',
+	#'*.b.c.d{c:d}',
+	#'a{b:c}d{e:f}',
+	'a{b:c}\r\nd{e:f}',
+	"{hash:#333}",
 	#'h1,h2{font-family:Arial,Heletica,sans-serif}',
-	#'body{background-position:center 118px !important;font:normal 13px/1.2em Arial, Helvetica, sans-serif;margin:0;padding:0;}',
+	'body{background-position:center 118px !important;font:normal 13px/1.2em Arial, Helvetica, sans-serif;margin:0;padding:0;}',
+	'a:hover{text-decoration:underline;}', # psuedo class
+	'span.ns{text-indent:-9000px;a:b}', # negative numbers
+	"""span.ns{display:block;text-indent:-9000px;width:1px;}
+	.lc{text-transform:none;}""",
+	""".jqmWindow{top:30%;left:50%;background-color:#fff}""",
+	"""expr-empty{foo:expression();}""",
+	"""{foo:expression(a);}""",
+	"""{foo:expression(a+b);}""",
+	"""{foo:expression(a+'s');}""",
+	"""{foo:expression(a.b+'s');}""",
+	"""{foo:expression((a+b));}""",
+	"""{foo:expression(a||b);}""",
+	"""{foo:expression(a+b+c);}""",
+	"""{foo:expression(a+(b+c));}""",
+	"""{foo:expression((a+b)+c);}""",
+	"""expr{width:expression(this.parentNode.offsetWidth+'px');height:expression(this.parentNode.offsetHeight+'px');}""",
+	"""* html .jqmWindow{top:expression((document.documentElement.scrollTop || document.body.scrollTop) + Math.round(30 * (document.documentElement.offsetHeight || document.body.clientHeight) / 100) + 'px');}""",
 ]
+
+# read from stdin if it's available
+try:
+	fcntl.fcntl(0, fcntl.F_SETFL, os.O_NONBLOCK) # stdin non-blocking
+	foo = stdin.read()
+	CSS_TESTS = [foo]
+except:
+	pass
 
 prod = 'css'
 for t in CSS_TESTS:
-	ok, children, nextchar = parser.parse(t, production=prod)
-	assert ok and nextchar == len(t), "Wasn't able to parse %s as a %s (%s chars parsed of %s), returned value was %s" % (
-			 repr(t), prod, nextchar, len(t), (ok, children, nextchar))
-	#print children
-	toplevel = AstNode.make(children, t)[0]
-	rules = []
-	#print ast
-	print toplevel.children
-	for c in toplevel.children:
-		print c.tag
-		if c.tag == 'rule':
-			rules.append(Rule(c))
-		#print a.dump()
-	print rules
+	print 'input=', t[:200], '...' if len(t) >= 200 else ''
+	ok, child, nextchar = parser.parse(t, production=prod)
+	assert ok and nextchar == len(t), \
+			"""Wasn't able to parse "%s..." as a %s (%s chars parsed of %s), returned value was %s""" % (
+			repr(t)[max(0,nextchar-1):nextchar+100], prod, nextchar, len(t), (ok, child[-1] if child else child, nextchar))
+	ast = AstNode.make(child, t)
+	print 'ast=', ast
+	top = [TopLevel(a.child[0]) for a in ast]
+	print 'parse tree=', top
+	print 'format=', [t.format() for t in top]
+	print ''
 
 """
 Checks:
@@ -140,5 +426,4 @@ Output:
 		-merge identical/subset decls
 			apply all merging aggressively
 """
-
 
