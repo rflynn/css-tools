@@ -416,20 +416,16 @@ CSS_TESTS = [
 	"""{foo:expression(a+b+c);}""",
 	"""{foo:expression(a+(b+c));}""",
 	"""{foo:expression((a+b)+c);}""",
-	"""expr{width:expression(this.parentNode.offsetWidth+'px');height:expression(this.parentNode.offsetHeight+'px');}""",
 	"""{foo:expression( ( a + b ) + c );}""",
 	"""{foo:expression(funcall());}""",
 	"""{foo:expression(funcall(2+2)+'');}""",
 	"""{foo:expression((a||b)+Math.round(1*(c||d)/1)+'e');}""",
-	"""* html .jqmWindow{top:expression((document.documentElement.scrollTop || document.body.scrollTop) + Math.round(30 * (document.documentElement.offsetHeight || document.body.clientHeight) / 100) + 'px');}""",
-	"""#reggreeting .closeb a,#ttvpopmessage .closeb a{background-color:inherit;color:#fff;}""",
-	"""#ka_login_container a{color:#000;}""",
+	"""#foo .bar a,#baz .closeb a{background-color:inherit;color:#fff;}""",
+	"""#under_scores a{color:#000;}""",
 	"""{empty-url:url()}""",
 	"""{a-url:url(a)}""",
 	"""{foo-url:url(http://foo)}""",
-	"""
-.ka_rate{background:transparent url(http://i.cdn.turner.com/trutv/trutv.com/graphics/community/ka/starBg.jpg) no-repeat scroll 0 0;float:left;width:116px;margin:0;padding:0px;}
-""",
+	"""""",
 ]
 
 # read from stdin if it's available
