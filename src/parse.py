@@ -8,7 +8,7 @@ CSS parser
 from simpleparse.common import numbers, strings, comments
 from simpleparse.parser import Parser
 from sys import stdin
-import fcntl, os
+import fcntl, os, sys
 
 class AstNode:
 	def __init__(self, s, tag, start, end, child):
@@ -222,7 +222,7 @@ class Sel_Tags:
 	def __repr__(self):
 		return 'Sel_Tags(' + str(self.tags) + ')'
 	def format(self):
-		return ' '.join(t.format() for t in self.tags)
+		return ''.join(t.format() for t in self.tags)
 	@staticmethod
 	def make(ast):
 		print 'Sel_Tags.make ast=', ast
@@ -238,26 +238,39 @@ class Sel_Ops:
 	def __repr__(self):
 		return 'Sel_Ops(' + str(self.op) + ')'
 	def format(self):
-		return ', '.join(o.format() for o in self.op)
+		return ''.join(o.format() for o in self.op)
 
 class Sel_Op:
+	CLASS  = 1
+	ID     = 2
+	PSUEDO = 3
+	CHILD  = 4
+	ADJ    = 5
+	ATTR   = 6
 	def __init__(self, ast):
 		print 'Sel_Op ast=', ast
 		self.ast = ast
 		c = ast.child[0]
 		self.tag = c.tag
 		print 'Sel_Op tag=', self.tag
-		self.operator = { 'sel_class'  : '.',
-				  'sel_id'     : '#',
-				  'sel_psuedo' : ':',
-				  'sel_child'  : '>',
-				  'sel_adj'    : '+',
-				  'sel_attr'   : '[' }[self.tag]
-		self.operand = c.child[0].child[0].child[0].str
+		if c.tag == 'sel_class':	self.op = Sel_Op.CLASS
+		elif c.tag == 'sel_id':		self.op = Sel_Op.ID
+		elif c.tag == 'sel_psuedo':	self.op = Sel_Op.PSUEDO
+		elif c.tag == 'sel_child':	self.op = Sel_Op.CHILD
+		elif c.tag == 'sel_adj':	self.op = Sel_Op.ADJ
+		elif c.tag == 'sel_attr':	self.op = Sel_Op.ATTR
+		self.s = c.child[0].child[0].child[0].str
 	def __repr__(self):
-		return 'Sel_Op(%s%s)' % (self.operator, self.operand)
+		return 'Sel_Op(%s)' % (self.format(),)
 	def format(self):
-		return self.operator + ('' if self.operator in ('.','#',':') else ' ') + self.operand
+		s = ''
+		if self.op == Sel_Op.CLASS:	s = '.'  + self.s
+		elif self.op == Sel_Op.ID:	s = '#'  + self.s
+		elif self.op == Sel_Op.PSUEDO:	s = ':'  + self.s
+		elif self.op == Sel_Op.CHILD:	s = '> ' + self.s
+		elif self.op == Sel_Op.ADJ:	s = '+ ' + self.s
+		elif self.op == Sel_Op.ATTR:	s = '['  + self.s + ']'
+		return s
 
 class Decls:
 	def __init__(self, ast):
@@ -454,6 +467,23 @@ try:
 	CSS_TESTS = [foo]
 except:
 	pass
+
+# looks like simpleparse module is breaking occasionally, try to catch it...
+# Ref: http://code.activestate.com/recipes/65287-automatically-start-the-debugger-on-an-exception/
+def info(type, value, tb):
+   if hasattr(sys, 'ps1') or not sys.stderr.isatty():
+      # we are in interactive mode or we don't have a tty-like
+      # device, so we call the default hook
+      sys.__excepthook__(type, value, tb)
+   else:
+      import traceback, pdb
+      # we are NOT in interactive mode, print the exception...
+      traceback.print_exception(type, value, tb)
+      print
+      # ...then start the debugger in post-mortem mode.
+      pdb.pm()
+
+sys.excepthook = info
 
 prod = 'css'
 for t in CSS_TESTS:
