@@ -1,192 +1,110 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 
-#
-# FIXME: LEPL is very powerful but its tokenstream is fucked;
-#	i want to mix Literals and Tokens,
-#	I want to be able to backtrack ALWAYS, etc.
-# investigate other parsers
-#
-
 """
-CSS Parser and evaluator
-"""
-import re
-import lepl
-from lepl import *
-
-ParseMe = """
-/* COMMENTS CANNOT BE NESTED */
-
-"""
-"""
-.empty-class { }
-#bg-id { background-color:#ccc }
-a:link, a:visited { color:Purple }
-A:active  { color: blue; font-size: 125% }
-BODY { background: url(bar.gif) white;
-       background-repeat: repeat-x ! important }
-code.html { color: #191970 }
-P EM { background: yellow }
-H1, H2, H3, H4, H5, H6 {
-  color: red;
-  font-family: sans-serif }
-* {color: #bb0; } /* universal selector */
-p > * > em {font-size: larger; } /* child combinator */
-@import "style.css";
-/* CSS2 attribute selectors */
-/* Ref: http://www.yourhtmlsource.com/stylesheets/advancedselectors.html */
-a[href="http://www.yourhtmlsource.com/"] {font-weight: bold; }
-a[title~="Mail"] {text-decoration: none; }
-p[align="right"][class="intro"] {line-height: 1.8em; }
-input:focus:hover {background: gold; }
-div#intro p:first-child {font-size: 110%; }
-blockquote p:nth-child(5) {color: gold; }
-table tr:nth-child(2n+1) td {background: silver; }
-div#content p:first-child::first-line {text-transform: uppercase; }
+CSS parser
 """
 
-class Comment(List): pass
-class AtKeyword(List): pass
-class AtRule(List): pass
-class Any(List): pass
-class Number(List): pass
-class Percentage(List): pass
-class Dimension(List): pass
-class String_(List): pass
-class Uri(List): pass
-class Hash(List): pass
-class Includes(List): pass
-class DashMatch(List): pass
-class UnicodeRange(List): pass
-class Property(List): pass
-class Values(List): pass
-class Decl(List): pass
-class Decls(List): pass
-class SelTag(List): pass
-class SelClass(List): pass
-class SelId(List): pass
-class SelUniv(List): pass
-class SelAttr(List): pass
-class SelAttrEq(List): pass
-class SelAttrInc(List): pass
-class SelAttrDash(List): pass
-class SelPsuedoClass(List): pass
-class SelChild(List): pass
-class SelAdjSibling(List): pass
-class Selector(List): pass
-class Selectors(List): pass
-class Ruleset(List): pass
+from simpleparse.common import numbers, strings, comments
+from simpleparse.parser import Parser
 
-# Ref: http://www.w3.org/TR/CSS2/syndata.html#syntax
+class AstNode:
+	def __init__(self, s, tag, start, end, children):
+		self.tag = tag
+		self.start = start
+		self.end = end
+		self.str = s[start:end]
+		self.children = children
+	def __str__(self):
+		if self.children:
+			return '%s(%s)' % (self.tag, str(self.children))
+		else:
+			return self.str
+	def __repr__(self): return str(self)
+	def dump(self, indent=0):
+		ins = ' ' * indent
+		if self.children:
+			return ins + '%s:\n' % (self.tag,) + \
+				''.join([c.dump(indent+1) for c in self.children])
+		else:
+			return ins + self.str + '\n'
+	@staticmethod
+	def make(matches, s):
+		nodes = []
+		for tag, start, end, children in matches:
+			if tag not in ('s',):
+				n = AstNode(s, tag, start, end,
+					AstNode.make(children, s) if children else [])
+				nodes.append(n)
+		return nodes 
 
-# 'b' = non-greedy, '...' == backtrack
-comment = ~Token('/\*') & (Token('[^\*]+') | Token('\*'))[::'b',...] & ~Token('\*/') > Comment
-#comment = Token('/\*') & ((Token('.') | Token('[a-zA-Z0-9_]+'))[::'b',...]) & ~Token('\*/') > Comment
+CSS_EBNF = r'''
+css      := toplevel*
+toplevel := rule/s
+rule     := sels?,block
+block    := '{',s?,decls,s?,'}'
+sels     := sel,(s?,',',s?,sel)*,s?
+decls    := decl?,(s?,';',s?,decl)*,s?,';'?
+decl     := property,s?,':',s?,values
+property := name
+values   := value,(s?,value)*,s?
+value    := any/block
+any      := string/percent/dim/uri/hash/inc/bareq/ident/num/delim
+string   := '"',[^"]*,'"'
+percent  := num,'%'
+dim      := (num,ident),('/',num,ident)*
+uri      := 'url(',[^)]*,')'
+hash     := '#',name
+inc      := '=~'
+bareq    := '|='
+ident    := [-]?,name
+num      := [0-9]+,([.],[0-9]+)?
+delim    := '!'/','
+name     := [a-zA-Z-],[a-zA-Z0-9-]*
+sel      := sel_tags,sel_ops?
+sel_tags := sel_tag,(s,sel_tag)*
+sel_tag  := '*'/ident
+sel_ops  := sel_child/sel_adj
+sel_child:= '>',sel_tags
+sel_adj  := '+',sel_tags
+s        := whitespace/comment
+space    := [ \t\r\n\v\f]+
+comment  := '/*','*/'
+'''
 
-CDO = Token('<!--')
-CDC = Token('-->')
+class Rule(AstNode):
+	def __init__(self, ast):
+		self.ast = ast
+	def __repr__(self):
+		return 'Rules:' + ''.join(map(str,self.ast.children))
 
-IDENT_ = Token('\-?[a-zA-Z_][a-zA-Z0-9_\-]*')
-NAME = Token('[a-zA-Z_][a-zA-Z0-9_\-]*')
-SYMBOL = Token('[^0-9a-zA-Z \t\r\n]')
+parser = Parser(CSS_EBNF)
 
-NUMBER = Token(Integer()) & Optional(Token('\.') & Token(Integer())) > Number
-PERCENTAGE = And(NUMBER, Token('%')) > Percentage
-DIMENSION = (NUMBER & IDENT_)[1:,~SYMBOL('/')] > Dimension
-stringbody = Token(r'[^"]*')
-STRING_ = SYMBOL('"') & Optional(stringbody) & SYMBOL('"') > String_
-url = Token('http://')#'(?:[a-z]+:)?/[^\)]*')
-URI = ~Token('url\(') & Optional(url) & ~SYMBOL(')') > Uri
-HASH = ~SYMBOL('#') & NAME > Hash
-ATKEYWORD = SYMBOL('@') & IDENT_ > AtKeyword
-INCLUDES = SYMBOL('=~') > Includes
-DASHMATCH = SYMBOL('|=') > DashMatch
-UNICODE = Token('[0-9a-f][0-9a-f]?[0-9a-f]?[0-9a-f]?[0-9a-f]?[0-9a-f]?')
-UNICODE_RANGE = (~Token('u\+') & UNICODE & Optional(SYMBOL('-') & UNICODE)) > UnicodeRange
-DELIM = (SYMBOL('!') | SYMBOL(','))
+CSS_TESTS = [
+	#'/**/',
+	#'/***/',
+	#'/* */',
+	'a,b{c:d;e:f}',
+	#'h1,h2{font-family:Arial,Heletica,sans-serif}',
+	#'body{background-position:center 118px !important;font:normal 13px/1.2em Arial, Helvetica, sans-serif;margin:0;padding:0;}',
+]
 
-def sane_error(s, e):
-	lineno, offset = map(int, re.search('line (\d+), character (\d+)', str(e)).groups(0))
-	lines = re.split('\r?\n', s)
-	line = lines[lineno-1]
-	linenostr = 'line %u: ' % (lineno,)
-	print '%s%s' % (linenostr, line.rstrip())
-	print '%s^-- %s' % (' ' * (len(linenostr) + offset - 1), e)
-
-"""
-from logging import basicConfig, DEBUG
-basicConfig(level=DEBUG)
-"""
-
-import sys
-
-S = Token('[ \r\n\t\v\f]')
-with DroppedSpace(S[:]):
-	any = PERCENTAGE | DIMENSION | URI | HASH | INCLUDES | DASHMATCH | IDENT_ | NUMBER | DELIM | SYMBOL(':') > Any #STRING_ #| FUNCTION S* [any|unused]* ')' > Any
-	# FIXME: UNICODE_RANGE breaks shit, why?!
-	# Ref: http://www.w3.org/TR/CSS2/selector.html#pattern-matching
-	sel_univ = ~SYMBOL('*') > SelUniv
-	sel_attrval = IDENT_# | STRING_
-	sel_attr_eq = ~SYMBOL('=') & sel_attrval > SelAttrEq
-	sel_attr_inc = ~INCLUDES & sel_attrval > SelAttrInc
-	sel_attr_dash = ~DASHMATCH & sel_attrval > SelAttrDash
-	sel_attrbody = IDENT_ & Optional(sel_attr_eq | sel_attr_inc | sel_attr_dash)
-	sel_attr = ~SYMBOL('[') & sel_attrbody & ~SYMBOL(']') > SelAttr
-	sel_psuedoclass = ~SYMBOL(':') & IDENT_ > SelPsuedoClass
-	sel_class = ~SYMBOL('.') & IDENT_ > SelClass
-	sel_id = ~SYMBOL('#') & IDENT_ > SelId
-	sel_tag = Optional(sel_univ) & (((Optional(IDENT_) & (sel_class | sel_id)) | IDENT_) & Optional(sel_psuedoclass) & Optional(sel_attr) > SelTag)
-	sel_tags = sel_tag[1:]
-	sel_child = ~SYMBOL('>') & sel_tags > SelChild
-	sel_adjsibling = SYMBOL('+') & sel_tags > SelAdjSibling
-	sel_ops = sel_child | sel_adjsibling
-	selector = sel_tags & Optional(sel_ops) > Selector
-	selectors = selector[1:,SYMBOL(',')]
-
-	property = IDENT_
-	block = Delayed()
-	value = (any | block)
-	values = value[1:] > Values
-	declaration = (property & ~Optional(S) & ~SYMBOL(':') & ~Optional(S) & values) > Decl
-	declarations = declaration[:,~SYMBOL(';')] + Optional(~SYMBOL(';')) > Decls
-	block += ~SYMBOL('{') & declarations & ~SYMBOL('}')
-	ruleset = (Optional(selectors) & block & ~Optional(S)) > Ruleset
-	at_rule = (ATKEYWORD & ~Optional(S) & Optional(any) & (block | Token(';') & ~Optional(S))) > AtRule
-toplevel = ruleset | comment
-stylesheet = toplevel[:]
-
-for s in [
-		'h1.big-text{a:b; c:1; d:100%; e:5px; f:string_doesnt_work; g:url(); h:#hash; border-width: -1px 2px 3px 4px;u:u+0;u2:u+012345-67890a;}',
-		'',
-		'/**/',
-		'/* */',
-		'/***/',
-		'/****/',
-		'/*** ROUNDED CORNERS (CSS 2.0) ***/',
-		'h1,h2{x:y}',
-		'*.foo{x:y}',
-		'a:link{a:b}',
-		'* a:link{a:b}',
-		'P#id > a:link{a:b}',
-		'a * b{a:b}',
-		'a[b]{a:b}',
-		'a[b=c]{a:b}',
-		'#a #b a{}',
-		'a{font-family:Arial, Helvetica, sans-serif;}',
-		'a{font:normal 1px/2.0px Arial;}',
-		'a{font:normal 1px/2em Arial;}',
-		'a{font:normal 1px/2.0em Arial;}',
-		#'@import;',
-		sys.stdin.read()
-		]:
-	try:
-		ast = stylesheet.parse(s)
-		for a in ast:
-			print a
-	except lepl.stream.maxdepth.FullFirstMatchException, e:
-		sane_error(s, e)
-		exit(1)
+prod = 'css'
+for t in CSS_TESTS:
+	ok, children, nextchar = parser.parse(t, production=prod)
+	assert ok and nextchar == len(t), "Wasn't able to parse %s as a %s (%s chars parsed of %s), returned value was %s" % (
+			 repr(t), prod, nextchar, len(t), (ok, children, nextchar))
+	#print children
+	toplevel = AstNode.make(children, t)[0]
+	rules = []
+	#print ast
+	print toplevel.children
+	for c in toplevel.children:
+		print c.tag
+		if c.tag == 'rule':
+			rules.append(Rule(c))
+		#print a.dump()
+	print rules
 
 """
 Checks:
@@ -222,4 +140,5 @@ Output:
 		-merge identical/subset decls
 			apply all merging aggressively
 """
+
 
