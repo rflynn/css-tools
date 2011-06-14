@@ -44,10 +44,11 @@ css      := toplevel*
 toplevel := rule/s
 rule     := sels?,block
 sels     := sel,(s?,',',s?,sel)*,s?
-sel      := sel_tags?,sel_ops?
-sel_tags := sel_tag,(s,sel_tag)*
-sel_tag  := '*'/ident
-sel_ops  := sel_op,(s?,sel_op)*
+# sel is a chain: a b.c > .d + e
+sel      := sel_tagop, (s?, sel_tagop)*
+sel_tagop:= (sel_tag, sel_op?) / (sel_tag?, sel_op)
+sel_tag  := ident/sel_univ
+sel_univ := '*'
 sel_op   := sel_class/sel_id/sel_psuedo/sel_child/sel_adj
 sel_class:= '.',sel_tag
 sel_id   := '#',sel_tag
@@ -74,10 +75,11 @@ number   := [-]?,[0-9]+,('.',[0-9]+)?
 delim    := delimiter
 delimiter:= '!'/','
 # FIXME: need to be able to parse Javascript, of course...
-expr     := 'expression(', exprexpr?, ')'
-exprexpr := exprop / exprterm / exprparen
-exprop   := exprterm, exprbinop, exprexpr
-exprterm := num / exprident / exprstr
+expr     := 'expression(', space?, exprexpr?, space?, ')'
+exprexpr := exprterm, (space?, exprop)*
+exprop   := exprbinop, space?, exprexpr
+exprterm := num / exprstr / ('(', space?, exprexpr?, space?, ')') / exprcall / exprident
+exprcall := exprident, '(', space?, exprexpr?, space?, ')'
 exprident:= name, ('.', name)*
 exprstr  := "'", -"'"*, "'"
 exprbinop:= '+' / '-' / '*' / '/' / '||' / '&&'
@@ -127,13 +129,20 @@ class TopLevel:
 
 class Rule:
 	def __init__(self, ast):
-		sels,decls = ast.child
-		self.sels = Sels(sels)
-		self.decls = Decls(decls)
+		print 'Rule ast=', ast
+		print 'Rule tag=', ast.child[0].tag
+		if ast.child[0].tag == 'sels':
+			self.sels = Sels(ast.child.pop(0))
+		else:
+			self.sels = Sels.Empty()
+		self.decls = Decls(ast.child[0])
 	def __repr__(self):
 		return 'Rule(%s,%s)' % (self.sels, self.decls)
 	def format(self):
-		return self.sels.format() + ' ' + self.decls.format(1)
+		selstr = self.sels.format()
+		if selstr:
+			selstr += ' '
+		return selstr + self.decls.format(1)
 
 class Comment:
 	def __init__(self, ast):
@@ -155,21 +164,28 @@ class Whitespace:
 
 class Sels:
 	def __init__(self, ast):
+		print 'Sels ast=', ast
 		self.sel = map(Sel, ast.child)
 	def __repr__(self):
 		return 'Sels(' + ','.join(map(str,self.sel)) + ')'
 	def format(self):
 		return ', '.join(s.format() for s in self.sel)
+	@staticmethod
+	def Empty():
+		return Sels(AstNode('','',0,0,[]))
 
 class Sel:
 	def __init__(self, ast):
-		self.sel = map(Sel.make, ast.child)
+		print 'Sel ast=', ast
+		self.sel = map(Sel.make, filter_space(ast.child))
 	def __repr__(self):
 		return 'Sel(' + ','.join(map(str,self.sel)) + ')'
 	@staticmethod
 	def make(ast):
-		if ast.tag == 'sel_tags':
-			return Sel_Tags(ast)
+		print 'Sel.make ast=', ast
+		skip_tagop = ast.child[0]
+		if skip_tagop.tag == 'sel_tag':
+			return Sel_Tags(skip_tagop)
 		return Sel_Ops(ast)
 	def format(self):
 		return ''.join(s.format() for s in self.sel)
@@ -180,15 +196,22 @@ def filter_space(l): return filter(lambda c: c.tag not in ('s','comment'), l)
 class Sel_Tags:
 	def __init__(self, ast):
 		# save tag idents, strip spaces/comments
-		print 'Sel_Tags=', ast.child
-		self.tags = map(Ident, (c.child[0] for c in filter_space(ast.child)))
+		print 'Sel_Tags=', filter_space(ast.child)
+		self.tags = map(Sel_Tags.make, (c for c in filter_space(ast.child)))
 	def __repr__(self):
 		return 'Sel_Tags(' + str(self.tags) + ')'
 	def format(self):
 		return ' '.join(t.format() for t in self.tags)
+	@staticmethod
+	def make(ast):
+		print 'Sel_Tags.make ast=', ast
+		if ast.str == '*':
+			return '*'
+		return Ident(ast)
 
 class Sel_Ops:
 	def __init__(self, ast):
+		print 'Sel_Ops ast=', ast
 		self.ast = ast
 		self.op = map(Sel_Op, ast.child)
 	def __repr__(self):
@@ -198,15 +221,17 @@ class Sel_Ops:
 
 class Sel_Op:
 	def __init__(self, ast):
+		print 'Sel_Op ast=', ast
 		self.ast = ast
 		c = ast.child[0]
 		self.tag = c.tag
+		print 'Sel_Op tag=', self.tag
 		self.operator = {
 				'sel_class'  : '.',
 				'sel_id'     : '#',
 				'sel_psuedo' : ':',
 				'sel_child'  : '>',
-				'sel_adj'    : '+' }[c.tag]
+				'sel_adj'    : '+' }[self.tag]
 		self.operand = c.child[0].child[0].child[0].str
 	def __repr__(self):
 		return 'Sel_Op(%s%s)' % (self.operator, self.operand)
@@ -215,6 +240,7 @@ class Sel_Op:
 
 class Decls:
 	def __init__(self, ast):
+		print 'Decls ast=', ast
 		self.decl = map(Decl, ast.child[0].child)
 	def __repr__(self):
 		return 'Decls(' + ','.join(map(str,self.decl)) + ')'
@@ -226,6 +252,7 @@ class Decls:
 
 class Decl:
 	def __init__(self, ast):
+		print 'Decl ast=', ast
 		prop,vals = ast.child
 		self.property = prop.str
 		self.values = map(Value, filter_space(vals.child))
@@ -343,6 +370,8 @@ CSS_TESTS = [
 	'/*/*/',
 	"{}",
 	"{;}",
+	'* html{}',
+	'html .jqmWindow{}',
 	#'a,b{c:d;e:f}',
 	'a b.c{d:e}',
 	#'*.b.c.d{c:d}',
@@ -367,7 +396,12 @@ CSS_TESTS = [
 	"""{foo:expression(a+(b+c));}""",
 	"""{foo:expression((a+b)+c);}""",
 	"""expr{width:expression(this.parentNode.offsetWidth+'px');height:expression(this.parentNode.offsetHeight+'px');}""",
+	"""{foo:expression( ( a + b ) + c );}""",
+	"""{foo:expression(funcall());}""",
+	"""{foo:expression(funcall(2+2)+'');}""",
+	"""{foo:expression((a||b)+Math.round(1*(c||d)/1)+'e');}""",
 	"""* html .jqmWindow{top:expression((document.documentElement.scrollTop || document.body.scrollTop) + Math.round(30 * (document.documentElement.offsetHeight || document.body.clientHeight) / 100) + 'px');}""",
+	"""#reggreeting .closeb a,#ttvpopmessage .closeb a{background-color:inherit;color:#fff;}""",
 ]
 
 # read from stdin if it's available
@@ -390,7 +424,7 @@ for t in CSS_TESTS:
 	top = [TopLevel(a.child[0]) for a in ast]
 	print 'parse tree=', top
 	print 'format=', [t.format() for t in top]
-	print ''
+	print '**************************'
 
 """
 Checks:
