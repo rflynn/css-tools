@@ -9,3 +9,8 @@ Upcoming toolkit will consist of:
 		css-minify
 	css-hint
 
+Dependencies:
+	sudo easy_install simpleparse
+	Ubuntu/Debian: sudo apt-get install python-dev
+	Redhat: sudo yum install python-dev
+
