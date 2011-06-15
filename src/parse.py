@@ -276,7 +276,7 @@ class Decls:
 		le = ';' + nl
 		return '{' + nl + \
 			le.join(nd + d.format() for d in self.decl) + \
-			(le if Format.Decl.LastSemi and not Format.minify else '') + \
+			(';' if Format.Decl.LastSemi and not Format.minify else '') + nl + \
 			'}' + nl + nl
 
 class Decl:
