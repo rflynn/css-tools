@@ -1,0 +1,9 @@
+/* before */
+body
+{
+background-image:url('img_tree.png');
+background-repeat:no-repeat;
+background-position:right top;
+}
+/* after (minify) */
+body{background:url('img_tree.png')no-repeat right top}

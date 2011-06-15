@@ -1,0 +1,11 @@
+/* before */
+a {
+font-style: italic;
+font-variant: small-caps;
+font-weight: bold;
+font-size: 1em;
+line-height: 1.5em;
+font-family: verdana,serif;
+}
+/* after (minify) */
+a{font:italic bold small-caps 1em/1.5em verdana,serif}
