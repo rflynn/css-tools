@@ -7,40 +7,11 @@ CSS parser
 
 from simpleparse.common import numbers, strings, comments
 from simpleparse.parser import Parser
+from itertools import chain
 from sys import stdin
 import fcntl, os, sys
 
-class AstNode:
-	def __init__(self, s, tag, start, end, child):
-		self.tag = tag
-		self.start = start
-		self.end = end
-		self.str = s[start:end]
-		self.child = child
-	def __str__(self):
-		if self.child:
-			return '%s(%s)' % (self.tag, str(self.child))
-		else:
-			return self.str
-	def __repr__(self): return str(self)
-	def dump(self, indent=0):
-		ins = ' ' * indent
-		if self.child:
-			return ins + '%s:\n' % (self.tag,) + \
-				''.join([c.dump(indent+1) for c in self.child])
-		else:
-			return ins + self.str + '\n'
-	@staticmethod
-	def make(matches, s):
-		nodes = []
-		for tag, start, end, child in matches:
-			n = AstNode(s, tag, start, end,
-				AstNode.make(child, s) if child else [])
-			nodes.append(n)
-		return nodes 
-	@staticmethod
-	def Empty():
-		return AstNode('','',0,0,[])
+from ast import AstNode
 
 CSS_EBNF = r'''
 css      := toplevel*
@@ -85,7 +56,8 @@ chars    := -'"'*
 inc      := '=~'
 bareq    := '|='
 ident    := ident2
-ident2   := [-]?,name
+# NOTE: simpleparse only gives you the identity of the token if you abstract one layer, wtf
+ident2   := [-]?,[a-zA-Z_-],[a-zA-Z0-9_-]*
 nonascii := [\x80-\xD7FF\xE000-\xFFFD\x10000-\x10FFFF]
 escape   := unicode / ('\\', [\x20-\x7E\x80-\xD7FF\xE000-\xFFFD\x10000-\x10FFFF])
 unicode  := '\\', hex, hex?, hex?, hex?, hex?, hex?, wc?
@@ -112,6 +84,8 @@ comment  := '/*', commtext, '*/'
 commtext := -"*/"*
 '''
 
+def flatten(l): return chain.from_iterable(l)
+
 class Format:
 	"""Options for CSS formatting"""
 	IndentChar = '\t'
@@ -127,6 +101,14 @@ class Format:
 		class Value:
 			LeadingSpace = False
 		LastSemi = False
+
+class CSSDoc:
+	def __init__(self, ast):
+		self.ast = ast
+		self.top = [TopLevel(a.child[0]) for a in ast]
+	def __repr__(self): return ''.join(map(str, self.top))
+	def format(self):
+		return ''.join(t.format() for t in self.top)
 
 class TopLevel:
 	def __init__(self, ast):
@@ -177,9 +159,9 @@ class Whitespace:
 	def __init__(self, ast):
 		self.ast = ast
 	def __repr__(self):
-		return self.ast.child[0].str
+		return 'Whitespace(%s)' % (self.ast.child[0].str,)
 	def format(self):
-		return str(self)
+		return self.ast.child[0].str;
 
 class Sels:
 	def __init__(self, ast):
@@ -197,47 +179,34 @@ class Sels:
 class Sel:
 	def __init__(self, ast):
 		print 'Sel ast=', ast
-		self.sel = map(Sel.make, filter_space(ast.child))
+		self.sel = flatten(map(Sel.make, filter_space(ast.child)))
 	def __repr__(self):
 		return 'Sel(' + ','.join(map(str,self.sel)) + ')'
+	def format(self):
+		#print 'Sel.sel=', self.sel
+		return ' '.join(s.format() for s in self.sel)
+	def is_simple(self):
+		"""is this selector free of complex operators?"""
+		return False
 	@staticmethod
 	def make(ast):
 		print 'Sel.make ast=', ast
 		skip_tagop = ast.child[0]
-		if skip_tagop.tag == 'sel_tag':
-			return Sel_Tags(skip_tagop)
-		return Sel_Ops(ast)
-	def format(self):
-		return ' '.join(s.format() for s in self.sel)
+		print 'Sel.make skip_tagop=', skip_tagop
+		return [Sel_Tag(c) if c.tag == 'sel_tag' else Sel_Op(c)
+			for c in ast.child]
 
 # strip whitespace and comments
 def filter_space(l): return filter(lambda c: c.tag not in ('s','comment'), l)
 
-class Sel_Tags:
+class Sel_Tag:
 	def __init__(self, ast):
 		# save tag idents, strip spaces/comments
-		print 'Sel_Tags=', filter_space(ast.child)
-		self.tags = map(Sel_Tags.make, (c for c in filter_space(ast.child)))
-	def __repr__(self):
-		return 'Sel_Tags(' + str(self.tags) + ')'
-	def format(self):
-		return ''.join(t.format() for t in self.tags)
-	@staticmethod
-	def make(ast):
-		print 'Sel_Tags.make ast=', ast
-		if ast.str == '*':
-			return '*'
-		return Ident(ast)
-
-class Sel_Ops:
-	def __init__(self, ast):
-		print 'Sel_Ops ast=', ast
-		self.ast = ast
-		self.op = map(Sel_Op, ast.child)
-	def __repr__(self):
-		return 'Sel_Ops(' + str(self.op) + ')'
-	def format(self):
-		return ''.join(o.format() for o in self.op)
+		print 'Sel_Tag=', filter_space(ast.child)
+		tag = filter_space(ast.child)[0]
+		self.tag = tag.str
+	def __repr__(self): return 'Sel_Tag(%s)' % (self.tag,)
+	def format(self): return self.tag.format()
 
 class Sel_Op:
 	CLASS  = 1
@@ -358,10 +327,16 @@ class Percent:
 class Dimension:
 	def __init__(self, ast):
 		self.ast = ast
+		# NOTE: dimension can contain multiple values for different units
+		self.vals = []
+		for i in range(0, len(ast.child), 2):
+			n, u = ast.child[i:i+2]
+			dim = (Number(n), Ident(u))
+			self.vals.append(dim)
 	def __repr__(self):
-		return 'Dimension(%s)' % (self.ast,)
+		return 'Dimension(%s)' % (self.vals,)
 	def format(self):
-		return str(self.ast)
+		return str(self.vals)
 
 class String:
 	def __init__(self, ast):
@@ -498,9 +473,9 @@ for t in CSS_TESTS:
 			repr(t)[max(0,nextchar-1):nextchar+100], prod, nextchar, len(t), (ok, child[-1] if child else child, nextchar))
 	ast = AstNode.make(child, t)
 	print 'ast=', ast
-	top = [TopLevel(a.child[0]) for a in ast]
-	print 'parse tree=', top
-	print 'format=', [t.format() for t in top]
+	doc = CSSDoc(ast)
+	print 'parse tree=', doc
+	print 'format=', doc.format()
 	print '**************************'
 
 """
