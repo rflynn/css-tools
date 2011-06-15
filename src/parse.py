@@ -26,9 +26,9 @@ sel_op   := sel_class/sel_id/sel_psuedo/sel_child/sel_adj/sel_attr
 sel_class:= '.',sel_tag
 sel_id   := '#',sel_tag
 sel_psuedo:=':',sel_tag
+sel_attr := '[',sel_tag,']'
 sel_child:= '>',s?,sel_tag
 sel_adj  := '+',s?,sel_tag
-sel_attr := '[',sel_tag,']'
 block    := '{',s?,decls,s?,'}'
 decls    := decl?,(s?,';',s?,decl)*,s?,';'?
 decl     := property,s?,':',s?,values
@@ -109,7 +109,7 @@ class Format:
 		Format.Spec.OpSpace = True
 		Format.Block.Indent = True
 		Format.Decl.Property.LeadingSpace = True
-		Format.Decl.Value.LeadingSpace = False
+		Format.Decl.Value.LeadingSpace = True
 		Format.Decl.LastSemi = True
 		Format.Decl.OnePerLine = True
 	@staticmethod
@@ -133,6 +133,16 @@ class CSSDoc:
 	def __repr__(self): return ''.join(map(str, self.top))
 	def format(self):
 		return ''.join(t.format() for t in self.top)
+	@staticmethod
+	def parse(text):
+		prod = 'css'
+		ok, child, nextchar = parser.parse(text, production=prod)
+		if not ok or nextchar != len(text):
+			raise Exception("""Wasn't able to parse "%s..." as a %s (%s chars parsed of %s), returned value was %s""" % (
+				repr(text)[max(0,nextchar-1):nextchar+100], prod, nextchar, len(text), (ok, child[-1] if child else child, nextchar)))
+		ast = AstNode.make(child, text)
+		doc = CSSDoc(ast)
+		return doc
 
 class TopLevel:
 	def __init__(self, ast):
@@ -177,7 +187,7 @@ class Comment:
 	def __repr__(self):
 		return 'Comment(%s)' % (self.text,)
 	def format(self):
-		return '/*%s*/' % (self.text,)
+		return '/*' + self.text + '*/' if not Format.Minify else ''
 
 class Whitespace:
 	def __init__(self, ast):
@@ -185,7 +195,7 @@ class Whitespace:
 	def __repr__(self):
 		return 'Whitespace(%s)' % (self.ast.child[0].str,)
 	def format(self):
-		return self.ast.child[0].str;
+		return self.ast.child[0].str if not Format.Minify else '';
 
 class Sels:
 	def __init__(self, ast):
@@ -194,7 +204,8 @@ class Sels:
 	def __repr__(self):
 		return 'Sels(' + ','.join(map(str,self.sel)) + ')'
 	def format(self):
-		return ', '.join(s.format() for s in self.sel)
+		j = ',' + (' ' if not Format.Minify else '')
+		return j.join(s.format() for s in self.sel)
 	@staticmethod
 	def Empty():
 		# fudge an empty Sels
@@ -203,13 +214,12 @@ class Sels:
 class Sel:
 	def __init__(self, ast):
 		#print 'Sel ast:', ast
-		self.sel = flatten(map(Sel.make, filter_space(ast.child)))
+		self.sel = map(Sel.make, filter_space(ast.child))
 		#print 'Sel.sel:', self.sel
 	def __repr__(self):
 		return 'Sel(' + ','.join(map(str,self.sel)) + ')'
 	def format(self):
-		#print 'Sel.sel:', self.sel
-		return ' '.join(s.format() for s in self.sel)
+		return ' '.join([''.join([s.format() for s in sel]) for sel in self.sel])
 	def is_simple(self):
 		"""is this selector free of complex operators?"""
 		return False
@@ -276,7 +286,7 @@ class Decls:
 		le = ';' + nl
 		return '{' + nl + \
 			le.join(nd + d.format() for d in self.decl) + \
-			(';' if Format.Decl.LastSemi and not Format.minify else '') + nl + \
+			(';' if Format.Decl.LastSemi and not Format.Minify else '') + nl + \
 			'}' + nl + nl
 
 class Decl:
@@ -289,8 +299,16 @@ class Decl:
 	def __repr__(self):
 		return 'Decl(%s:%s)' % (self.property, self.values)
 	def format(self):
-		valstr = reduce(lambda x,y: x + ('' if type(y) == Delim and Format.Minify else ' ') + y.format(),
-					self.values[1:], self.values[0].format())
+		# decl values need spaces between them even in Minify, with a few exceptions
+		valstr = self.values[0].format()
+		prevNoSpace = False # set by values to tell next one it doesn't need a space
+		for v in self.values[1:]:
+			sp = ' '
+			isDelim = Format.Minify and isinstance(v, Delim)
+			if prevNoSpace or isDelim:
+				sp = ''
+			prevNoSpace = isDelim or isinstance(v, Uri)
+			valstr += sp + v.format()
 		return	self.property + ':' + \
 			(' ' if Format.Decl.Value.LeadingSpace else '') + valstr
 	def __eq__(self, other): return self.values == other.values
@@ -516,64 +534,24 @@ def info(type, value, tb):
 sys.excepthook = info
 
 def find_duplicate_decl_properties(rules):
+	"""
+	not so easy; there are browser hacks out there that require this. be smarter.
+	"""
 	for r in rules:
 		decls = r.decls.decl
 		d = dict([(x.property, x.values) for x in decls])
 		if len(d) != len(decls):
-			print '%s contains %u duplicated property' % ('!' * 30, len(decls) - len(d))
-			print r.format()
+			yield (r, len(decls) - len(d))
 
-Format.canonical()
-
-prod = 'css'
-for t in CSS_TESTS:
-	print 'input=', t[:200], '...' if len(t) >= 200 else ''
-	ok, child, nextchar = parser.parse(t, production=prod)
-	assert ok and nextchar == len(t), \
-			"""Wasn't able to parse "%s..." as a %s (%s chars parsed of %s), returned value was %s""" % (
-			repr(t)[max(0,nextchar-1):nextchar+100], prod, nextchar, len(t), (ok, child[-1] if child else child, nextchar))
-	ast = AstNode.make(child, t)
-	#print 'ast=', ast
-	doc = CSSDoc(ast)
-	#print 'parse tree:', doc
-	print 'format:', doc.format()
-	#print 'doc.rules:', doc.rules
-	print 'Duplicate decl properties:'
-	find_duplicate_decl_properties(doc.rules)
-	print '**************************'
-
-"""
-Checks:
-	- dimensions without unit should be converted to 'px'
-	- too many similar but different colors in the same range
-	- validate against known web browser versions and CSS standards
-
-Normalize:
-	- find/merge redundant/conflicting
-		- selectors
-			h1 { font-family: sans-serif }
-			h2 { font-family: sans-serif }
-			h3 { font-family: sans-serif }
-			h1, h2, h3 { font-family: sans-serif }
-	- find/merge redundant/conflicting decls
-	- merge together separate decls:
-		from:
-			border-top-width: 1px;
-			border-right-width: 2px;
-			border-bottom-width: 3px;
-		to:
-			border-width: 1px 2px 3px auto;
-
-Output:
-	- pretty-print
-	- minify
-		-eliminate unnecessary whitespace
-		-remove unnecessary ';' in last decl
-		-strip comments(?)
-		-reduce color codes
-			#cccccc -> #ccc
-			#ff0000 -> red
-		-merge identical/subset decls
-			apply all merging aggressively
-"""
-
+if __name__ == '__main__':
+	for t in CSS_TESTS:
+		doc = CSSDoc.parse(t)
+		print 'parse tree:', doc
+		print doc.format()
+		#print 'doc.rules:', doc.rules
+		Format.canonical()
+		rules_with_dupes = list(find_duplicate_decl_properties(doc.rules))
+		if rules_with_dupes:
+			print '/* !!! Duplicate decl properties !!! */'
+			for r, dupecnt in rules_with_dupes:
+				print r.format()
