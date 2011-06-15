@@ -144,7 +144,7 @@ class CSSDoc:
 		self.ast = ast
 		self.top = [TopLevel(a.child[0]) for a in ast]
 		self.rules = [t.contents for t in self.top if isinstance(t.contents, Rule)]
-	def __repr__(self): return ''.join(map(str, self.top))
+	def __repr__(self): return ','.join(map(str, self.top))
 	def format(self):
 		return ''.join(t.format() for t in self.top).rstrip()
 	@staticmethod
