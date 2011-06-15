@@ -28,11 +28,20 @@ def decl_find_duplicate_properties(doc):
 
 def selectors_merge_identical(doc):
 	"""
+	for each unique selector:
+		merge all specified decls
+	this allows us to perform intra-decl operations
 	"""
+	sel_decls = {}
 	for r in doc.rules:
 		for sel in r.sels.sel:
-			print sel
-			print r.decls
+			try:
+				sel_decls[sel] += r.decls
+			except KeyError:
+				sel_decls[sel] = r.decls
+	print sel_decls
+	for k,v in sel_decls.items():
+		print k.format(), v.format()
 
 op = OptionParser()
 (Opts, Args) = op.parse_args()
