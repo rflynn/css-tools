@@ -88,9 +88,9 @@ def flatten(l): return list(chain.from_iterable(l))
 
 class Format:
 	"""Options for CSS formatting"""
-	IndentChar = '\t'
-	IndentSize = 1
-	Indent = IndentChar * IndentSize
+	Minify = False
+	class Indent:
+		Char = '\t'
 	class Spec:
 		OpSpace = True
 	class Block:
@@ -100,7 +100,27 @@ class Format:
 			LeadingSpace = True
 		class Value:
 			LeadingSpace = False
-		LastSemi = False
+		LastSemi = True
+		OnePerLine = True
+		NewLine = '\r\n' # TODO: detect Windows/UNIX line endings
+	@staticmethod
+	def canonical():
+		Format.Minify = False
+		Format.Spec.OpSpace = True
+		Format.Block.Indent = True
+		Format.Decl.Property.LeadingSpace = True
+		Format.Decl.Value.LeadingSpace = False
+		Format.Decl.LastSemi = True
+		Format.Decl.OnePerLine = True
+	@staticmethod
+	def minify():
+		Format.Minify = True
+		Format.Spec.OpSpace = False
+		Format.Block.Indent = False
+		Format.Decl.Property.LeadingSpace = False
+		Format.Decl.Value.LeadingSpace = False
+		Format.Decl.LastSemi = False
+		Format.Decl.OnePerLine = False
 
 # strip whitespace and comments
 def filter_space(l): return filter(lambda c: c.tag not in ('s','comment'), l)
@@ -134,8 +154,8 @@ class TopLevel:
 
 class Rule:
 	def __init__(self, ast):
-		print 'Rule ast:', ast
-		print 'Rule tag:', ast.child[0].tag
+		#print 'Rule ast:', ast
+		#print 'Rule tag:', ast.child[0].tag
 		if ast.child[0].tag == 'sels':
 			self.sels = Sels(ast.child.pop(0))
 		else:
@@ -145,18 +165,9 @@ class Rule:
 		return 'Rule(%s,%s)' % (self.sels, self.decls)
 	def format(self):
 		selstr = self.sels.format()
-		if selstr:
+		if selstr and not Format.Minify:
 			selstr += ' '
-		return selstr + self.decls.format(1)
-
-def xdecls(rules):
-	for r in rules:
-		decls = r.decls.decl
-		for i in range(len(decls)):
-			x = decls[i]
-			for j in range(len(decls)):
-				y = decls[j]
-				print 'decl %s:%s == %s:%s : %s' % (x.property, x.values, y.property, y.values, x == y)
+		return selstr + self.decls.format()
 
 class Comment:
 	def __init__(self, ast):
@@ -178,7 +189,7 @@ class Whitespace:
 
 class Sels:
 	def __init__(self, ast):
-		print 'Sels ast:', ast
+		#print 'Sels ast:', ast
 		self.sel = map(Sel, filter_space(ast.child))
 	def __repr__(self):
 		return 'Sels(' + ','.join(map(str,self.sel)) + ')'
@@ -191,9 +202,9 @@ class Sels:
 
 class Sel:
 	def __init__(self, ast):
-		print 'Sel ast:', ast
+		#print 'Sel ast:', ast
 		self.sel = flatten(map(Sel.make, filter_space(ast.child)))
-		print 'Sel.sel:', self.sel
+		#print 'Sel.sel:', self.sel
 	def __repr__(self):
 		return 'Sel(' + ','.join(map(str,self.sel)) + ')'
 	def format(self):
@@ -204,16 +215,16 @@ class Sel:
 		return False
 	@staticmethod
 	def make(ast):
-		print 'Sel.make ast:', ast
+		#print 'Sel.make ast:', ast
 		skip_tagop = ast.child[0]
-		print 'Sel.make skip_tagop:', skip_tagop
+		#print 'Sel.make skip_tagop:', skip_tagop
 		return [Sel_Tag(c) if c.tag == 'sel_tag' else Sel_Op(c)
 			for c in ast.child]
 
 class Sel_Tag:
 	def __init__(self, ast):
 		# save tag idents, strip spaces/comments
-		print 'Sel_Tag:', filter_space(ast.child)
+		#print 'Sel_Tag:', filter_space(ast.child)
 		tag = filter_space(ast.child)[0]
 		self.tag = tag.str
 	def __repr__(self): return 'Sel_Tag(%s)' % (self.tag,)
@@ -251,33 +262,36 @@ class Sel_Op:
 
 class Decls:
 	def __init__(self, ast):
-		print 'Decls ast:', ast
+		#print 'Decls ast:', ast
 		decls = list(filter_space(ast.child))[0].child
-		print 'Decls decls:', decls
+		#print 'Decls decls:', decls
 		nospace = filter_space(decls)
-		print 'Decls nospace:', nospace
+		#print 'Decls nospace:', nospace
 		self.decl = map(Decl, nospace)
 	def __repr__(self):
 		return 'Decls(' + ','.join(map(str,self.decl)) + ')'
-	def format(self, indent_level=0):
-		return '{' + \
-			'; '.join(d.format(indent_level) for d in self.decl) + \
-			(';' if Format.Decl.LastSemi else '') + \
-			'}'
+	def format(self):
+		nd = Format.Indent.Char if Format.Block.Indent else ''
+		nl = '\n' if Format.Block.Indent else ''
+		le = ';' + nl
+		return '{' + nl + \
+			le.join(nd + d.format() for d in self.decl) + le + \
+			'}' + nl + nl
 
 class Decl:
 	def __init__(self, ast):
-		print 'Decl ast:', ast
+		#print 'Decl ast:', ast
 		nospace = list(filter_space(ast.child))
 		prop,vals = nospace
 		self.property = prop.str
 		self.values = map(Value.make, filter_space(vals.child))
 	def __repr__(self):
 		return 'Decl(%s:%s)' % (self.property, self.values)
-	def format(self, indent_level):
-		return self.property + ':' + \
-			(' ' if Format.Decl.Value.LeadingSpace else '') + \
-			' '.join(v.format() for v in self.values)
+	def format(self):
+		valstr = reduce(lambda x,y: x + ('' if type(y) == Delim and Format.Minify else ' ') + y.format(),
+					self.values[1:], self.values[0].format())
+		return	self.property + ':' + \
+			(' ' if Format.Decl.Value.LeadingSpace else '') + valstr
 	def __eq__(self, other): return self.values == other.values
 
 class Value:
@@ -334,7 +348,7 @@ class Dimension:
 			dim = (Number(n), Ident(u))
 			self.vals.append(dim)
 	def __repr__(self): return 'Dimension(%s)' % (self.vals,)
-	def format(self): return str(self.vals)
+	def format(self): return '/'.join(n.format() + u.format() for n,u in self.vals)
 	def __eq__(self, other): return type(other) == Dimension and self.vals == other.vals
 
 class String:
@@ -451,6 +465,16 @@ def info(type, value, tb):
 
 sys.excepthook = info
 
+def find_duplicate_decl_properties(rules):
+	for r in rules:
+		decls = r.decls.decl
+		d = dict([(x.property, x.values) for x in decls])
+		if len(d) != len(decls):
+			print '%s contains %u duplicated property' % ('!' * 30, len(decls) - len(d))
+			print r.format()
+
+Format.canonical()
+
 prod = 'css'
 for t in CSS_TESTS:
 	print 'input=', t[:200], '...' if len(t) >= 200 else ''
@@ -459,12 +483,13 @@ for t in CSS_TESTS:
 			"""Wasn't able to parse "%s..." as a %s (%s chars parsed of %s), returned value was %s""" % (
 			repr(t)[max(0,nextchar-1):nextchar+100], prod, nextchar, len(t), (ok, child[-1] if child else child, nextchar))
 	ast = AstNode.make(child, t)
-	print 'ast=', ast
+	#print 'ast=', ast
 	doc = CSSDoc(ast)
-	print 'parse tree:', doc
+	#print 'parse tree:', doc
 	print 'format:', doc.format()
-	print 'doc.rules:', doc.rules
-	print 'xdecls:', xdecls(doc.rules)
+	#print 'doc.rules:', doc.rules
+	print 'Duplicate decl properties:'
+	find_duplicate_decl_properties(doc.rules)
 	print '**************************'
 
 """
