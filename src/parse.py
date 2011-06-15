@@ -365,10 +365,59 @@ class Delim:
 	def __eq__(self, other): return type(other) == Delim and self.s == other.s
 
 class Hash:
-	def __init__(self, ast): self.s = ast.str
-	def __repr__(self): return 'Hash(%s)' % (self.s,)
-	def format(self): return self.s
-	def __eq__(self, other): return type(other) == Hash and self.s == other.s
+	def __init__(self, ast):
+		self.color = Color(ast.str)
+	def __repr__(self): return 'Hash(%s)' % (self.color,)
+	def format(self): return self.color.format()
+	def __eq__(self, other): return type(other) == Hash and self.color == other.color
+
+class Color:
+	# Ref: http://www.w3.org/TR/CSS2/syndata.html#color-units
+	KEYWORDS = {
+		'maroon'  : '#800000',
+		'red'     : '#ff0000',
+		'orange'  : '#ffa500',
+		'yellow'  : '#ffff00',
+		'olive'   : '#808000',
+		'purple'  : '#800080',
+		'fuchsia' : '#ff00ff',
+		'white'   : '#ffffff',
+		'lime'    : '#00ff00',
+		'green'   : '#008000',
+		'navy'    : '#000080',
+		'blue'    : '#0000ff',
+		'aqua'    : '#00ffff',
+		'teal'    : '#008080',
+		'black'   : '#000000',
+		'silver'  : '#c0c0c0',
+		'gray'    : '#808080',
+	}
+	KEYWORDS_REV = dict((v,k) for k,v in KEYWORDS.items())
+	def __init__(self, s):
+		name, rgb3, rgb6 = None, None, None
+		sl = s.lower()
+		if sl in Color.KEYWORDS:
+			name = s.lower()
+			rgb6 = Color.KEYWORDS[name]
+			s = rgb6
+		if s[:1] == '#':
+			if len(sl) == 7 and sl[1] == sl[2] and sl[3] == sl[4] and sl[5] == sl[6]:
+				print '7'
+				rgb6 = sl
+				rgb3 = '#' + sl[1] + sl[3] + sl[5]
+			elif len(s) == 4:
+				rgb3 = sl
+				rgb6 = '#' + (sl[1] * 2) + (sl[2] * 2) + (sl[3] * 2)
+			if not name and rgb6 and rgb6 in Color.KEYWORDS_REV:
+				name = Color.KEYWORDS_REV[rgb6]
+		self.canonical = name if name else rgb6 if rgb6 else s
+		self.shortest = name if (name and len(name) < 4) else rgb3 if rgb3 else name if name else s
+	def __repr__(self):
+		return 'Color(%s)' % (self.canonical,)
+	def format(self):
+		return self.shortest if Format.Minify else self.canonical
+	def __eq__(self, other):
+		return type(other) == Color and self.canonical == other.canonical
 
 class Expression:
 	def __init__(self, ast): self.s = ast.str
