@@ -89,6 +89,7 @@ def flatten(l): return list(chain.from_iterable(l))
 class Format:
 	"""Options for CSS formatting"""
 	Minify = False
+	Unmodified = False
 	class Indent:
 		Char = '\t'
 	class Spec:
@@ -126,17 +127,18 @@ class Format:
 def filter_space(l): return filter(lambda c: c.tag not in ('s','comment'), l)
 
 class CSSDoc:
+	Parser = Parser(CSS_EBNF)
 	def __init__(self, ast):
 		self.ast = ast
 		self.top = [TopLevel(a.child[0]) for a in ast]
 		self.rules = [t.contents for t in self.top if isinstance(t.contents, Rule)]
 	def __repr__(self): return ''.join(map(str, self.top))
 	def format(self):
-		return ''.join(t.format() for t in self.top)
+		return ''.join(t.format() for t in self.top).rstrip()
 	@staticmethod
 	def parse(text):
 		prod = 'css'
-		ok, child, nextchar = parser.parse(text, production=prod)
+		ok, child, nextchar = CSSDoc.Parser.parse(text, production=prod)
 		if not ok or nextchar != len(text):
 			raise Exception("""Wasn't able to parse "%s..." as a %s (%s chars parsed of %s), returned value was %s""" % (
 				repr(text)[max(0,nextchar-1):nextchar+100], prod, nextchar, len(text), (ok, child[-1] if child else child, nextchar)))
@@ -177,7 +179,8 @@ class Rule:
 		selstr = self.sels.format()
 		if selstr and not Format.Minify:
 			selstr += ' '
-		return selstr + self.decls.format()
+		nl = '\n' if not Format.Minify else ''
+		return selstr + self.decls.format() + nl
 
 class Comment:
 	def __init__(self, ast):
@@ -195,7 +198,12 @@ class Whitespace:
 	def __repr__(self):
 		return 'Whitespace(%s)' % (self.ast.child[0].str,)
 	def format(self):
-		return self.ast.child[0].str if not Format.Minify else '';
+		if Format.Minify:
+			return ''
+		s = self.ast.child[0].str
+		if not Format.Unmodified and s.count('\n') > 1:
+			return '\n'
+		return s
 
 class Sels:
 	def __init__(self, ast):
@@ -287,7 +295,7 @@ class Decls:
 		return '{' + nl + \
 			le.join(nd + d.format() for d in self.decl) + \
 			(';' if Format.Decl.LastSemi and not Format.Minify else '') + nl + \
-			'}' + nl + nl
+			'}'
 
 class Decl:
 	def __init__(self, ast):
@@ -455,9 +463,37 @@ class Filter:
 	def format(self): return self.s
 	def __eq__(self, other): return type(other) == Filter and self.s == other.s
 
-parser = Parser(CSS_EBNF)
+# looks like simpleparse module is breaking occasionally, try to catch it...
+# Ref: http://code.activestate.com/recipes/65287-automatically-start-the-debugger-on-an-exception/
+def info(type, value, tb):
+   if hasattr(sys, 'ps1') or not sys.stderr.isatty():
+      # we are in interactive mode or we don't have a tty-like
+      # device, so we call the default hook
+      sys.__excepthook__(type, value, tb)
+   else:
+      import traceback, pdb
+      # we are NOT in interactive mode, print the exception...
+      traceback.print_exception(type, value, tb)
+      print
+      # ...then start the debugger in post-mortem mode.
+      pdb.pm()
 
-CSS_TESTS = [
+
+def find_duplicate_decl_properties(rules):
+	"""
+	not so easy; there are browser hacks out there that require this. be smarter.
+	"""
+	for r in rules:
+		decls = r.decls.decl
+		d = dict([(x.property, x.values) for x in decls])
+		if len(d) != len(decls):
+			yield (r, len(decls) - len(d))
+
+if __name__ == '__main__':
+
+	sys.excepthook = info
+
+	CSS_TESTS = [
 	'/**/',
 	'/***/',
 	'/****/',
@@ -506,44 +542,17 @@ CSS_TESTS = [
 	"""filter-yay{filter:progid:DXImageTransform.Microsoft.AlphaImageLoader()}""",
 	"""filter-yay{filter:progid:DXImageTransform.Microsoft.AlphaImageLoader(enabled='true')}""",
 	"""filter-yay{filter:progid:DXImageTransform.Microsoft.AlphaImageLoader(enabled='true', sizingMethod='img',src='http://image.jpg')}""",
-]
+	]
 
-# read from stdin if it's available
-try:
-	fcntl.fcntl(0, fcntl.F_SETFL, os.O_NONBLOCK) # stdin non-blocking
-	foo = stdin.read()
-	CSS_TESTS = [foo]
-except:
-	pass
+	# read from stdin if it's available
+	try:
+		fcntl.fcntl(0, fcntl.F_SETFL, os.O_NONBLOCK) # stdin non-blocking
+		foo = stdin.read()
+		CSS_TESTS = [foo]
+	except:
+		pass
 
-# looks like simpleparse module is breaking occasionally, try to catch it...
-# Ref: http://code.activestate.com/recipes/65287-automatically-start-the-debugger-on-an-exception/
-def info(type, value, tb):
-   if hasattr(sys, 'ps1') or not sys.stderr.isatty():
-      # we are in interactive mode or we don't have a tty-like
-      # device, so we call the default hook
-      sys.__excepthook__(type, value, tb)
-   else:
-      import traceback, pdb
-      # we are NOT in interactive mode, print the exception...
-      traceback.print_exception(type, value, tb)
-      print
-      # ...then start the debugger in post-mortem mode.
-      pdb.pm()
 
-sys.excepthook = info
-
-def find_duplicate_decl_properties(rules):
-	"""
-	not so easy; there are browser hacks out there that require this. be smarter.
-	"""
-	for r in rules:
-		decls = r.decls.decl
-		d = dict([(x.property, x.values) for x in decls])
-		if len(d) != len(decls):
-			yield (r, len(decls) - len(d))
-
-if __name__ == '__main__':
 	for t in CSS_TESTS:
 		doc = CSSDoc.parse(t)
 		print 'parse tree:', doc
