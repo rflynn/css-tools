@@ -275,7 +275,8 @@ class Decls:
 		nl = '\n' if Format.Block.Indent else ''
 		le = ';' + nl
 		return '{' + nl + \
-			le.join(nd + d.format() for d in self.decl) + le + \
+			le.join(nd + d.format() for d in self.decl) + \
+			(le if Format.Decl.LastSemi and not Format.minify else '') + \
 			'}' + nl + nl
 
 class Decl:
