@@ -18,16 +18,16 @@ css      := toplevel*
 toplevel := rule/s
 rule     := sels?,block
 sels     := sel,(s?,',',s?,sel)*,s?
-sel      := sel_tagop, (s?, sel_tagop)*
-sel_tagop:= (sel_tag, sel_op?) / (sel_tag?, sel_op)
+sel      := sel_tagop,(s?,sel_tagop)*
+sel_tagop:= (sel_tag,sel_op?)/(sel_tag?,sel_op)
 sel_tag  := ident/sel_univ
 sel_univ := '*'
 sel_op   := sel_class/sel_id/sel_psuedo/sel_child/sel_adj/sel_attr
 sel_class:= '.',sel_tag
 sel_id   := '#',sel_tag
 sel_psuedo:=':',sel_tag
-sel_child:= '>',sel_tag
-sel_adj  := '+',sel_tag
+sel_child:= '>',s?,sel_tag
+sel_adj  := '+',s?,sel_tag
 sel_attr := '[',sel_tag,']'
 block    := '{',s?,decls,s?,'}'
 decls    := decl?,(s?,';',s?,decl)*,s?,';'?
@@ -84,7 +84,7 @@ comment  := '/*', commtext, '*/'
 commtext := -"*/"*
 '''
 
-def flatten(l): return chain.from_iterable(l)
+def flatten(l): return list(chain.from_iterable(l))
 
 class Format:
 	"""Options for CSS formatting"""
@@ -102,10 +102,14 @@ class Format:
 			LeadingSpace = False
 		LastSemi = False
 
+# strip whitespace and comments
+def filter_space(l): return filter(lambda c: c.tag not in ('s','comment'), l)
+
 class CSSDoc:
 	def __init__(self, ast):
 		self.ast = ast
 		self.top = [TopLevel(a.child[0]) for a in ast]
+		self.rules = [t.contents for t in self.top if isinstance(t.contents, Rule)]
 	def __repr__(self): return ''.join(map(str, self.top))
 	def format(self):
 		return ''.join(t.format() for t in self.top)
@@ -130,8 +134,8 @@ class TopLevel:
 
 class Rule:
 	def __init__(self, ast):
-		print 'Rule ast=', ast
-		print 'Rule tag=', ast.child[0].tag
+		print 'Rule ast:', ast
+		print 'Rule tag:', ast.child[0].tag
 		if ast.child[0].tag == 'sels':
 			self.sels = Sels(ast.child.pop(0))
 		else:
@@ -144,6 +148,15 @@ class Rule:
 		if selstr:
 			selstr += ' '
 		return selstr + self.decls.format(1)
+
+def xdecls(rules):
+	for r in rules:
+		decls = r.decls.decl
+		for i in range(len(decls)):
+			x = decls[i]
+			for j in range(len(decls)):
+				y = decls[j]
+				print 'decl %s:%s == %s:%s : %s' % (x.property, x.values, y.property, y.values, x == y)
 
 class Comment:
 	def __init__(self, ast):
@@ -165,7 +178,7 @@ class Whitespace:
 
 class Sels:
 	def __init__(self, ast):
-		print 'Sels ast=', ast
+		print 'Sels ast:', ast
 		self.sel = map(Sel, filter_space(ast.child))
 	def __repr__(self):
 		return 'Sels(' + ','.join(map(str,self.sel)) + ')'
@@ -178,35 +191,33 @@ class Sels:
 
 class Sel:
 	def __init__(self, ast):
-		print 'Sel ast=', ast
+		print 'Sel ast:', ast
 		self.sel = flatten(map(Sel.make, filter_space(ast.child)))
+		print 'Sel.sel:', self.sel
 	def __repr__(self):
 		return 'Sel(' + ','.join(map(str,self.sel)) + ')'
 	def format(self):
-		#print 'Sel.sel=', self.sel
+		#print 'Sel.sel:', self.sel
 		return ' '.join(s.format() for s in self.sel)
 	def is_simple(self):
 		"""is this selector free of complex operators?"""
 		return False
 	@staticmethod
 	def make(ast):
-		print 'Sel.make ast=', ast
+		print 'Sel.make ast:', ast
 		skip_tagop = ast.child[0]
-		print 'Sel.make skip_tagop=', skip_tagop
+		print 'Sel.make skip_tagop:', skip_tagop
 		return [Sel_Tag(c) if c.tag == 'sel_tag' else Sel_Op(c)
 			for c in ast.child]
-
-# strip whitespace and comments
-def filter_space(l): return filter(lambda c: c.tag not in ('s','comment'), l)
 
 class Sel_Tag:
 	def __init__(self, ast):
 		# save tag idents, strip spaces/comments
-		print 'Sel_Tag=', filter_space(ast.child)
+		print 'Sel_Tag:', filter_space(ast.child)
 		tag = filter_space(ast.child)[0]
 		self.tag = tag.str
 	def __repr__(self): return 'Sel_Tag(%s)' % (self.tag,)
-	def format(self): return self.tag.format()
+	def format(self): return self.tag
 
 class Sel_Op:
 	CLASS  = 1
@@ -216,18 +227,16 @@ class Sel_Op:
 	ADJ    = 5
 	ATTR   = 6
 	def __init__(self, ast):
-		print 'Sel_Op ast=', ast
 		self.ast = ast
 		c = ast.child[0]
 		self.tag = c.tag
-		print 'Sel_Op tag=', self.tag
 		if c.tag == 'sel_class':	self.op = Sel_Op.CLASS
 		elif c.tag == 'sel_id':		self.op = Sel_Op.ID
 		elif c.tag == 'sel_psuedo':	self.op = Sel_Op.PSUEDO
 		elif c.tag == 'sel_child':	self.op = Sel_Op.CHILD
 		elif c.tag == 'sel_adj':	self.op = Sel_Op.ADJ
 		elif c.tag == 'sel_attr':	self.op = Sel_Op.ATTR
-		self.s = c.child[0].child[0].child[0].str
+		self.s = list(filter_space(c.child))[0].child[0].child[0].str
 	def __repr__(self):
 		return 'Sel_Op(%s)' % (self.format(),)
 	def format(self):
@@ -242,11 +251,11 @@ class Sel_Op:
 
 class Decls:
 	def __init__(self, ast):
-		print 'Decls ast=', ast
+		print 'Decls ast:', ast
 		decls = list(filter_space(ast.child))[0].child
-		print 'Decls decls=', decls
+		print 'Decls decls:', decls
 		nospace = filter_space(decls)
-		print 'Decls nospace=', nospace
+		print 'Decls nospace:', nospace
 		self.decl = map(Decl, nospace)
 	def __repr__(self):
 		return 'Decls(' + ','.join(map(str,self.decl)) + ')'
@@ -258,30 +267,25 @@ class Decls:
 
 class Decl:
 	def __init__(self, ast):
-		print 'Decl ast=', ast
+		print 'Decl ast:', ast
 		nospace = list(filter_space(ast.child))
 		prop,vals = nospace
 		self.property = prop.str
-		self.values = map(Value, filter_space(vals.child))
+		self.values = map(Value.make, filter_space(vals.child))
 	def __repr__(self):
 		return 'Decl(%s:%s)' % (self.property, self.values)
 	def format(self, indent_level):
 		return self.property + ':' + \
 			(' ' if Format.Decl.Value.LeadingSpace else '') + \
 			' '.join(v.format() for v in self.values)
+	def __eq__(self, other): return self.values == other.values
 
 class Value:
-	def __init__(self, ast):
-		self.v = Value.make(ast)
-	def __repr__(self):
-		return 'Value(%s)' % (self.v,)
-	def format(self):
-		return self.v.format()
 	@staticmethod
 	def make(ast):
 		v = ast.child[0]
 		if v.tag != 'any':
-			print 'ast=', ast
+			print 'ast:', ast
 			raise Exception('unsupported')
 		x = v.child[0]
 		if x.tag == 'ident':	return Ident(x)
@@ -294,35 +298,31 @@ class Value:
 		elif x.tag == 'expr':	return Expression(x)
 		elif x.tag == 'uri':	return Uri(x)
 		elif x.tag == 'filter':	return Filter(x)
-		print 'Value.make.x=', x
+		print 'Value.make.x:', x
 		assert False
 		return ast
 
 class Ident:
-	def __init__(self, ast):
-		self.s = ast.child[0].str
-	def __repr__(self):
-		return 'Ident(%s)' % (self.s,)
-	def format(self):
-		return self.s
+	def __init__(self, ast): self.s = ast.child[0].str
+	def __repr__(self): return 'Ident(%s)' % (self.s,)
+	def format(self): return self.s
+	def __eq__(self, other): return type(other) == Ident and self.s == other.s
 
 class Number:
 	def __init__(self, ast):
 		self.s = ast.child[0].str
 		self.f = float(self.s)
-	def __repr__(self):
-		return 'Num(%s)' % (self.s,)
-	def format(self):
-		return self.s
+	def __repr__(self): return 'Num(%s)' % (self.s,)
+	def format(self): return self.s
+	def __eq__(self, other): return type(other) == Number and self.s == other.s
 
 class Percent:
 	def __init__(self, ast):
 		self.s = ast.child[0].str
 		self.f = float(self.s)
-	def __repr__(self):
-		return 'Percent(%s%%)' % (self.s,)
-	def format(self):
-		return self.s + '%'
+	def __repr__(self): return 'Percent(%s%%)' % (self.s,)
+	def format(self): return self.s + '%'
+	def __eq__(self, other): return type(other) == Percent and self.s == other.s
 
 class Dimension:
 	def __init__(self, ast):
@@ -333,58 +333,45 @@ class Dimension:
 			n, u = ast.child[i:i+2]
 			dim = (Number(n), Ident(u))
 			self.vals.append(dim)
-	def __repr__(self):
-		return 'Dimension(%s)' % (self.vals,)
-	def format(self):
-		return str(self.vals)
+	def __repr__(self): return 'Dimension(%s)' % (self.vals,)
+	def format(self): return str(self.vals)
+	def __eq__(self, other): return type(other) == Dimension and self.vals == other.vals
 
 class String:
-	def __init__(self, ast):
-		self.s = ast.child[0].str
-	def __repr__(self):
-		return self.s
-	def format(self):
-		return self.s
+	def __init__(self, ast): self.s = ast.child[0].str
+	def __repr__(self): return self.s
+	def format(self): return self.s
+	def __eq__(self, other): return type(other) == String and self.s == other.s
 
 class Delim:
-	def __init__(self, ast):
-		self.s = ast.str
-	def __repr__(self):
-		return 'Delim(%s)' % (self.s,)
-	def format(self):
-		return self.s
+	def __init__(self, ast): self.s = ast.str
+	def __repr__(self): return 'Delim(%s)' % (self.s,)
+	def format(self): return self.s
+	def __eq__(self, other): return type(other) == Delim and self.s == other.s
 
 class Hash:
-	def __init__(self, ast):
-		self.s = ast.str
-	def __repr__(self):
-		return 'Hash(%s)' % (self.s,)
-	def format(self):
-		return self.s
+	def __init__(self, ast): self.s = ast.str
+	def __repr__(self): return 'Hash(%s)' % (self.s,)
+	def format(self): return self.s
+	def __eq__(self, other): return type(other) == Hash and self.s == other.s
 
 class Expression:
-	def __init__(self, ast):
-		self.s = ast.str
-	def __repr__(self):
-		return 'Expression(%s)' % (self.s,)
-	def format(self):
-		return self.s
+	def __init__(self, ast): self.s = ast.str
+	def __repr__(self): return 'Expression(%s)' % (self.s,)
+	def format(self): return self.s
+	def __eq__(self, other): return type(other) == Expression and self.s == other.s
 
 class Uri:
-	def __init__(self, ast):
-		self.s = ast.str
-	def __repr__(self):
-		return 'Uri(%s)' % (self.s,)
-	def format(self):
-		return self.s
+	def __init__(self, ast): self.s = ast.str
+	def __repr__(self): return 'Uri(%s)' % (self.s,)
+	def format(self): return self.s
+	def __eq__(self, other): return type(other) == Uri and self.s == other.s
 
 class Filter:
-	def __init__(self, ast):
-		self.s = ast.str
-	def __repr__(self):
-		return 'Filter(%s)' % (self.s,)
-	def format(self):
-		return self.s
+	def __init__(self, ast): self.s = ast.str
+	def __repr__(self): return 'Filter(%s)' % (self.s,)
+	def format(self): return self.s
+	def __eq__(self, other): return type(other) == Filter and self.s == other.s
 
 parser = Parser(CSS_EBNF)
 
@@ -474,8 +461,10 @@ for t in CSS_TESTS:
 	ast = AstNode.make(child, t)
 	print 'ast=', ast
 	doc = CSSDoc(ast)
-	print 'parse tree=', doc
-	print 'format=', doc.format()
+	print 'parse tree:', doc
+	print 'format:', doc.format()
+	print 'doc.rules:', doc.rules
+	print 'xdecls:', xdecls(doc.rules)
 	print '**************************'
 
 """
