@@ -90,6 +90,7 @@ class Format:
 	"""Options for CSS formatting"""
 	Minify = False
 	Unmodified = False
+	Stack = []
 	class Indent:
 		Char = '\t'
 	class Spec:
@@ -106,6 +107,7 @@ class Format:
 		NewLine = '\r\n' # TODO: detect Windows/UNIX line endings
 	@staticmethod
 	def canonical():
+		Format.Stack.append('canonical')
 		Format.Minify = False
 		Format.Spec.OpSpace = True
 		Format.Block.Indent = True
@@ -115,6 +117,7 @@ class Format:
 		Format.Decl.OnePerLine = True
 	@staticmethod
 	def minify():
+		Format.Stack.append('minify')
 		Format.Minify = True
 		Format.Spec.OpSpace = False
 		Format.Block.Indent = False
@@ -122,6 +125,15 @@ class Format:
 		Format.Decl.Value.LeadingSpace = False
 		Format.Decl.LastSemi = False
 		Format.Decl.OnePerLine = False
+	@staticmethod
+	def pop():
+		# NOTE: intentionally raise exception if none were pushed
+		last = Format.Stack.pop(0)
+		if last == 'canonical':
+			Format.canonical()
+		elif last == 'minify':
+			Format.minify()
+		return last
 
 # strip whitespace and comments
 def filter_space(l): return filter(lambda c: c.tag not in ('s','comment'), l)
