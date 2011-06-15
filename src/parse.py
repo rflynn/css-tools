@@ -184,7 +184,7 @@ class Rule:
 			self.sels = Sels(ast.child.pop(0))
 		else:
 			self.sels = Sels.Empty()
-		self.decls = Decls(ast.child[0])
+		self.decls = Decls.build(ast.child[0])
 	def __repr__(self):
 		return 'Rule(%s,%s)' % (self.sels, self.decls)
 	def format(self):
@@ -235,7 +235,7 @@ class Sels:
 class Sel:
 	def __init__(self, ast):
 		#print 'Sel ast:', ast
-		self.sel = map(Sel.make, filter_space(ast.child))
+		self.sel = map(Sel.build, filter_space(ast.child))
 		#print 'Sel.sel:', self.sel
 	def __repr__(self):
 		return 'Sel(' + ','.join(map(str,self.sel)) + ')'
@@ -245,12 +245,17 @@ class Sel:
 		"""is this selector free of complex operators?"""
 		return False
 	@staticmethod
-	def make(ast):
+	def build(ast):
 		#print 'Sel.make ast:', ast
 		skip_tagop = ast.child[0]
 		#print 'Sel.make skip_tagop:', skip_tagop
 		return [Sel_Tag(c) if c.tag == 'sel_tag' else Sel_Op(c)
 			for c in ast.child]
+	def __hash__(self):
+		"""we want equality by value, not object, for dictionaries"""
+		return hash(str(self))
+	def __cmp__(self, other):
+		return cmp(str(self), str(other))
 
 class Sel_Tag:
 	def __init__(self, ast):
@@ -292,13 +297,8 @@ class Sel_Op:
 		return s
 
 class Decls:
-	def __init__(self, ast):
-		#print 'Decls ast:', ast
-		decls = list(filter_space(ast.child))[0].child
-		#print 'Decls decls:', decls
-		nospace = filter_space(decls)
-		#print 'Decls nospace:', nospace
-		self.decl = map(Decl, nospace)
+	def __init__(self, decl):
+		self.decl = decl
 	def __repr__(self):
 		return 'Decls(' + ','.join(map(str,self.decl)) + ')'
 	def format(self):
@@ -309,6 +309,18 @@ class Decls:
 			le.join(nd + d.format() for d in self.decl) + \
 			(';' if Format.Decl.LastSemi and not Format.Minify else '') + nl + \
 			'}'
+	@staticmethod
+	def build(ast):
+		"""build Decls() from an AstNode"""
+		#print 'Decls ast:', ast
+		decls = list(filter_space(ast.child))[0].child
+		#print 'Decls decls:', decls
+		nospace = filter_space(decls)
+		#print 'Decls nospace:', nospace
+		decl = map(Decl, nospace)
+		return Decls(decl)
+	def __add__(self, other):
+		return Decls(self.decl + other.decl)
 
 class Decl:
 	def __init__(self, ast):
