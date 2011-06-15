@@ -196,7 +196,8 @@ class Whitespace:
 	def __init__(self, ast):
 		self.ast = ast
 	def __repr__(self):
-		return 'Whitespace(%s)' % (self.ast.child[0].str,)
+		s = self.ast.child[0].str
+		return 'Whitespace(%s)' % (repr(s),)
 	def format(self):
 		if Format.Minify:
 			return ''
