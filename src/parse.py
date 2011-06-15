@@ -491,17 +491,6 @@ def info(type, value, tb):
       # ...then start the debugger in post-mortem mode.
       pdb.pm()
 
-
-def find_duplicate_decl_properties(rules):
-	"""
-	not so easy; there are browser hacks out there that require this. be smarter.
-	"""
-	for r in rules:
-		decls = r.decls.decl
-		d = dict([(x.property, x.values) for x in decls])
-		if len(d) != len(decls):
-			yield (r, len(decls) - len(d))
-
 if __name__ == '__main__':
 
 	sys.excepthook = info
@@ -565,15 +554,8 @@ if __name__ == '__main__':
 	except:
 		pass
 
-
 	for t in CSS_TESTS:
 		doc = CSSDoc.parse(t)
 		print 'parse tree:', doc
 		print doc.format()
 		#print 'doc.rules:', doc.rules
-		Format.canonical()
-		rules_with_dupes = list(find_duplicate_decl_properties(doc.rules))
-		if rules_with_dupes:
-			print '/* !!! Duplicate decl properties !!! */'
-			for r, dupecnt in rules_with_dupes:
-				print r.format()
