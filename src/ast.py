@@ -12,7 +12,7 @@ class AstNode:
 		if self.child:
 			return '%s(%s)' % (self.tag, str(self.child))
 		else:
-			return self.str
+			return repr(self.str)
 	def __repr__(self): return str(self)
 	def dump(self, indent=0):
 		ins = ' ' * indent
