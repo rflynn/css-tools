@@ -191,20 +191,23 @@ def properties_merge(parent, decl):
 				# and has no automatic default we cannot produce an
 				# equivalent parent Decl, bail
 				return None
+	if not vals:
+		return None # couldn't merge
 	if len(vals) == 4 and isinstance(merger, Box):
 		# "If one or more of the values are not present, the value for a missing side is taken
 		# from the opposite side that is present. If only one value is listed, it applies to all sides."
 		# Ref: http://www.blooberry.com/indexdot/css/properties/padding/padding.htm
 		#print '%s == %s: %s' % (vals[0], vals[1], vals[0] == vals[1])
 		if vals[0] == vals[1] and vals[0] == vals[2] and vals[0] == vals[3]:
-			# in the box model you've got four sides; if 4 identical child values exist
-			# then it must be border/padding/margin and we can reduce to 1
+			# [top, right, bottom, left] -> [top/right/bottom/left]
 			vals = vals[:1]
 		elif vals[1] == vals[3]:
-			# if the left and right values are equal we can omit the right side
-			vals = vals[:3]
-	if not vals:
-		return None # couldn't merge
+			if vals[2] == vals[4]:
+				# [top, right, bottom, left] -> [top/bottom, left/right]
+				vals = vals[:2]
+			else:
+				# [top, right, bottom, left] -> [top, left/right, bottom]
+				vals = vals[:3]
 	return Decl(parent, vals)
 
 def decls_property_combine(block):
