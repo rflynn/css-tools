@@ -1,0 +1,12 @@
+/* before */
+a {
+	margin-top: 1px
+}
+a,d {
+	margin-bottom: 1px
+}
+a {
+	margin-left:1px; margin-right:1px
+}
+/* after */
+a{margin:1px}d{margin-bottom:1px}

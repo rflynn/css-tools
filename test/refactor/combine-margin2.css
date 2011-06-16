@@ -1,0 +1,9 @@
+/* test: if right/left are the same, we can omit left and it will be taken from the right
+ */
+/* before */
+a{margin-top:1px}
+a{margin-right:1px}
+a{margin-left:1px}
+/* after */
+a{margin:1px 1px auto}
+
