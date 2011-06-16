@@ -156,7 +156,7 @@ class CSSDoc:
 		ok, child, nextchar = CSSDoc.Parser.parse(text, production=prod)
 		if not ok or nextchar != len(text):
 			raise Exception("""Wasn't able to parse "%s..." as a %s (%s chars parsed of %s), returned value was %s""" % (
-				repr(text)[max(0,nextchar-1):nextchar+100], prod, nextchar, len(text), (ok, child[-1] if child else child, nextchar)))
+				repr(text)[max(0,nextchar-20):nextchar+100], prod, nextchar, len(text), (ok, child[-1] if child else child, nextchar)))
 		ast = AstNode.make(child, text)
 		doc = CSSDoc(ast)
 		return doc
@@ -321,9 +321,9 @@ class Decls:
 		nl = '\n' if Format.Block.Indent else ''
 		le = ';' + nl
 		return '{' + nl + \
-			le.join(nd + d.format() for d in self.decl) + \
-			(';' if Format.Decl.LastSemi and not Format.Minify else '') + nl + \
-			'}'
+			((le.join(nd + d.format() for d in self.decl) +
+			 (';' if Format.Decl.LastSemi and not Format.Minify else '') + nl) \
+				if self.decl else '') + '}'
 	def __hash__(self):
 		return hash(str(sorted(self.decl)))
 	def __cmp__(self, other):
@@ -394,7 +394,7 @@ class Value:
 		elif x.tag == 'string':	return String(x)
 		elif x.tag == 'hash':	return Hash(x)
 		elif x.tag == 'dim':	return Dimension(x)
-		elif x.tag == 'delim':	return Delim(x)
+		elif x.tag == 'delim':	return Delim.from_ast(x)
 		elif x.tag == 'expr':	return Expression(x)
 		elif x.tag == 'uri':	return Uri(x)
 		elif x.tag == 'filter':	return Filter(x)
@@ -406,7 +406,7 @@ class Ident(object):
 	def __init__(self, s): self.s = s
 	def __repr__(self): return 'Ident(%s)' % (self.s,)
 	def format(self): return self.s
-	def __eq__(self, other): return type(other) == Ident and self.s == other.s
+	def __cmp__(self, other): return cmp(str(self), str(other))
 	@staticmethod
 	def from_ast(ast): return Ident(ast.child[0].str)
 
@@ -416,7 +416,7 @@ class Number:
 		self.f = float(self.s)
 	def __repr__(self): return 'Number(%s)' % (self.s,)
 	def format(self): return self.s
-	def __eq__(self, other): return type(other) == Number and self.s == other.s
+	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class Percent:
 	def __init__(self, ast):
@@ -424,7 +424,7 @@ class Percent:
 		self.f = float(self.s)
 	def __repr__(self): return 'Percent(%s%%)' % (self.s,)
 	def format(self): return self.s + '%'
-	def __eq__(self, other): return type(other) == Percent and self.s == other.s
+	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class Dimension:
 	def __init__(self, ast):
@@ -437,30 +437,33 @@ class Dimension:
 			self.vals.append(dim)
 	def __repr__(self): return 'Dimension(%s)' % (self.vals,)
 	def format(self): return '/'.join(n.format() + u.format() for n,u in self.vals)
-	def __eq__(self, other): return str(self) == str(other)
+	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class String:
 	def __init__(self, ast): self.s = ast.child[0].str
 	def __repr__(self): return self.s
 	def format(self): return self.s
-	def __eq__(self, other): return type(other) == String and self.s == other.s
+	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class Delim:
-	def __init__(self, ast): self.s = ast.str
+	def __init__(self, s): self.s = s
 	def __repr__(self): return 'Delim(%s)' % (self.s,)
 	def format(self): return self.s
 	def leading_space(self):
 		return self.s in ('!',)
 	def trailing_space(self):
 		return self.s in (',',)
-	def __eq__(self, other): return type(other) == Delim and self.s == other.s
+	def __cmp__(self, other): return cmp(str(self), str(other))
+	@staticmethod
+	def from_ast(ast):
+		return Delim(ast.str)
 
 class Hash:
 	def __init__(self, ast):
 		self.color = Color(ast.str)
 	def __repr__(self): return 'Hash(%s)' % (self.color,)
 	def format(self): return self.color.format()
-	def __eq__(self, other): return type(other) == Hash and self.color == other.color
+	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class Color:
 	# Ref: http://www.w3.org/TR/CSS2/syndata.html#color-units
@@ -506,26 +509,25 @@ class Color:
 		return 'Color(%s)' % (self.canonical,)
 	def format(self):
 		return self.shortest if Format.Minify else self.canonical
-	def __eq__(self, other):
-		return type(other) == Color and self.canonical == other.canonical
+	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class Expression:
 	def __init__(self, ast): self.s = ast.str
 	def __repr__(self): return 'Expression(%s)' % (self.s,)
 	def format(self): return self.s
-	def __eq__(self, other): return type(other) == Expression and self.s == other.s
+	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class Uri:
 	def __init__(self, ast): self.s = ast.str
 	def __repr__(self): return 'Uri(%s)' % (self.s,)
 	def format(self): return self.s
-	def __eq__(self, other): return type(other) == Uri and self.s == other.s
+	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class Filter:
 	def __init__(self, ast): self.s = ast.str
 	def __repr__(self): return 'Filter(%s)' % (self.s,)
 	def format(self): return self.s
-	def __eq__(self, other): return type(other) == Filter and self.s == other.s
+	def __cmp__(self, other): return cmp(str(self), str(other))
 
 # looks like simpleparse module is breaking occasionally, try to catch it...
 # Ref: http://code.activestate.com/recipes/65287-automatically-start-the-debugger-on-an-exception/
