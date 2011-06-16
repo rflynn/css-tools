@@ -41,8 +41,7 @@ values   := value,(s?,value)*,s?
 value    := any/block
 any      := percent/dim/hash/expr/uri/string/filter/ident/num/inc/bareq/delim
 percent  := num,'%'
-# FIXME: wrong, dimensons are scalar; you were looking at font-size/line-height; '/' is a delimiter
-dim      := (num,ident),('/',num,ident)*
+dim      := num,ident
 hash     := '#',hex+
 uri      := url
 url      := ('url(',urlchars,')')
@@ -70,7 +69,7 @@ wc       := [\x9\xA\xC\xD\x20]
 num      := number
 number   := [-]?,[0-9]+,('.',[0-9]+)?
 delim    := delimiter
-delimiter:= '!'/','
+delimiter:= '!'/','/'/'
 expr     := 'expression(', space?, exprexpr?, space?, ')'
 exprexpr := exprterm, (space?, exprop)*
 exprop   := exprbinop, space?, exprexpr
@@ -422,14 +421,12 @@ class Percent:
 class Dimension:
 	def __init__(self, ast):
 		self.ast = ast
-		# NOTE: dimension can contain multiple values for different units
-		self.vals = []
-		for i in range(0, len(ast.child), 2):
-			n, u = ast.child[i:i+2]
-			dim = (Number(n), Ident.from_ast(u))
-			self.vals.append(dim)
-	def __repr__(self): return 'Dimension(%s)' % (self.vals,)
-	def format(self): return '/'.join(n.format() + u.format() for n,u in self.vals)
+		n = ast.child[0]
+		self.num = Number(n)
+		u = ast.child[1] if len(ast.child) > 1 else ''
+		self.unit = Ident.from_ast(u)
+	def __repr__(self): return 'Dimension(%s,%s)' % (self.num, self.unit)
+	def format(self): return self.num.format() + self.unit.format()
 	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class String:
