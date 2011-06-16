@@ -20,19 +20,18 @@ css      := toplevel*
 toplevel := rule/s
 rule     := sels?,block
 sels     := sel,(s?,',',s?,sel)*,s?
-sel      := sel_tagop,(s?,sel_tagop)*
-# FIXME: WRONG! parses #a.b as #a .b
-# TODO: remove Sel_Tag and make everything a Sel_Op; group Sel_Ops by spacing explicitly
-sel_tagop:= (sel_tag,sel_op?)/(sel_tag?,sel_op)
-sel_tag  := ident/sel_univ
+sel      := sel_ops,(s,sel_ops)*
+sel_ops  := sel_op+
+sel_op   := sel_tag/sel_class/sel_id/sel_psuedo/sel_child/sel_adj/sel_attr
+sel_tag  := tag
+sel_class:= '.',tag
+sel_id   := '#',tag
+sel_psuedo:=':',tag
+sel_attr := '[',tag,']'
+sel_child:= '>',s?,tag
+sel_adj  := '+',s?,tag
+tag      := ident/sel_univ
 sel_univ := '*'
-sel_op   := sel_class/sel_id/sel_psuedo/sel_child/sel_adj/sel_attr
-sel_class:= '.',sel_tag
-sel_id   := '#',sel_tag
-sel_psuedo:=':',sel_tag
-sel_attr := '[',sel_tag,']'
-sel_child:= '>',s?,sel_tag
-sel_adj  := '+',s?,sel_tag
 block    := '{',s?,decls,s?,'}'
 decls    := decl?,(s?,';',s?,decl?)*,s?,';'?
 decl     := property,s?,':',s?,values
@@ -265,34 +264,26 @@ class Sel:
 		#print 'Sel.from_ast ast:', ast
 		skip_tagop = ast.child[0]
 		#print 'Sel.from_ast skip_tagop:', skip_tagop
-		return [Sel_Tag(c) if c.tag == 'sel_tag' else Sel_Op(c)
-			for c in ast.child]
+		return map(Sel_Op, ast.child)
 	def __hash__(self):
 		return hash(str(self))
 	def __cmp__(self, other):
 		return cmp(str(self), str(other))
 
-class Sel_Tag:
-	def __init__(self, ast):
-		# save tag idents, strip spaces/comments
-		#print 'Sel_Tag:', filter_space(ast.child)
-		tag = filter_space(ast.child)[0]
-		self.tag = tag.str
-	def __repr__(self): return 'Sel_Tag(%s)' % (self.tag,)
-	def format(self): return self.tag
-
 class Sel_Op:
-	CLASS  = 1
-	ID     = 2
-	PSUEDO = 3
-	CHILD  = 4
-	ADJ    = 5
-	ATTR   = 6
+	TAG    = 1
+	CLASS  = 2
+	ID     = 3
+	PSUEDO = 4
+	CHILD  = 5
+	ADJ    = 6
+	ATTR   = 7
 	def __init__(self, ast):
 		self.ast = ast
 		c = ast.child[0]
 		self.tag = c.tag
-		if c.tag == 'sel_class':	self.op = Sel_Op.CLASS
+		if c.tag == 'sel_tag':		self.op = Sel_Op.TAG
+		elif c.tag == 'sel_class':	self.op = Sel_Op.CLASS
 		elif c.tag == 'sel_id':		self.op = Sel_Op.ID
 		elif c.tag == 'sel_psuedo':	self.op = Sel_Op.PSUEDO
 		elif c.tag == 'sel_child':	self.op = Sel_Op.CHILD
@@ -302,13 +293,14 @@ class Sel_Op:
 	def __repr__(self):
 		return 'Sel_Op(%s)' % (self.format(),)
 	def format(self):
-		s = ''
-		if self.op == Sel_Op.CLASS:	s = '.'  + self.s
-		elif self.op == Sel_Op.ID:	s = '#'  + self.s
-		elif self.op == Sel_Op.PSUEDO:	s = ':'  + self.s
-		elif self.op == Sel_Op.CHILD:	s = '> ' + self.s
-		elif self.op == Sel_Op.ADJ:	s = '+ ' + self.s
-		elif self.op == Sel_Op.ATTR:	s = '['  + self.s + ']'
+		s = self.s
+		if self.op == Sel_Op.TAG:	s =        s
+		elif self.op == Sel_Op.CLASS:	s = '.'  + s
+		elif self.op == Sel_Op.ID:	s = '#'  + s
+		elif self.op == Sel_Op.PSUEDO:	s = ':'  + s
+		elif self.op == Sel_Op.CHILD:	s = '> ' + s
+		elif self.op == Sel_Op.ADJ:	s = '+ ' + s
+		elif self.op == Sel_Op.ATTR:	s = '['  + s + ']'
 		return s
 
 class Decls:
@@ -607,6 +599,7 @@ if __name__ == '__main__':
 
 	for t in CSS_TESTS:
 		doc = CSSDoc.parse(t)
+		print 'ast:', doc.ast
 		print 'parse tree:', doc
 		print doc.format()
 		#print 'doc.rules:', doc.rules
