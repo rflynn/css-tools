@@ -17,7 +17,7 @@ from collections import defaultdict
 from optparse import OptionParser
 
 import parse as cssparse
-from parse import Decl, Ident
+from parse import Rule, Sels, Decls, Decl, Ident
 
 
 def flatten(l): return list(chain.from_iterable(l))
@@ -175,9 +175,6 @@ def properties_merge(parent, decl):
 		return None # don't bother merging < 2 children
 	inherited, merger, children = PROPERTIES[parent]
 	prop = dict((d.propertylow, d) for d in decl)
-	if len(prop) != len(decl):
-		return None # at least one duplicated, go no further
-
 	vals = []
 	for c in children:
 		if c in prop:
@@ -193,9 +190,7 @@ def properties_merge(parent, decl):
 				# if the value is not present, does not inherit...
 				# and has no automatic default we cannot produce an
 				# equivalent parent Decl, bail
-				print "can't merge child:", c
 				return None
-	print 'vals:', vals
 	if len(vals) == 4 and isinstance(merger, Box):
 		# "If one or more of the values are not present, the value for a missing side is taken
 		# from the opposite side that is present. If only one value is listed, it applies to all sides."
@@ -222,10 +217,10 @@ def decls_property_combine(block):
 			parent = PARENT[decl.property]
 			if parent:
 				parents[parent].append(decl)
+	if len(prop) != len(block.decl):
+		# 1+ duplicate properties, go no further
+		return block
 	# now go by parents...
-	# FIXME hmmm... there are 3 layers of tags, 2 possible levels
-	# of parents; do I bring everything to the top-most layer,
-	# or go iteratively or what?...
 	for parent, decls in parents.iteritems():
 		if parent in prop:
 			# parent exists in the decl also; skip it for now
@@ -281,16 +276,32 @@ else:
 	contents = sys.stdin.read()
 
 doc = cssparse.CSSDoc.parse(contents)
-print doc.rules
+#print doc.rules
 
 cssparse.Format.canonical()
 
+# merge all properies associated with each selector
 sels_merged = selectors_merge(doc)
-print sels_merged
+
+# merge child properties into parents
+foo = []
 for sel, decls in sels_merged.items():
 	dcomb = decls_property_combine(decls)
-	print sel.format(), dcomb.format()
+	foo.append((sel, dcomb))
+	#print sel.format(), dcomb.format()
 
+# merge selectors having identical decls
+# TODO: would be better if we identified subsets of decls that were longer than their selector name,
+# then merged those, breaking decls up
+#foo = sorted(
+identical_decls = defaultdict(list)
+#print foo
+for s, d in foo:
+	identical_decls[d].append(s)
+for d, s in identical_decls.items():
+	#print s, d
+	r = Rule(Sels(s), d)
+	print r.format()
 
 """
 rules_with_dupes = list(decl_find_duplicate_properties(doc))
