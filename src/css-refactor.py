@@ -43,6 +43,26 @@ def selectors_merge_identical(doc):
 	for k,v in sel_decls.items():
 		print k.format(), v.format()
 
+"""
+algorithm given PROPERTIES[property] = {name, inherited, default, children}
+the goal of which is to combine properties into parent properties in order
+which often (but not always) produce shorter equivalent code
+"""
+from collections import defaultdict
+def property_combine(decls):
+	# merge decl based on property parents
+	parents = defaultdict(list)
+	for decl in decls.decls:
+		parent = PROPERTIES[decl.property].parent
+		if parent:
+			parents[parent].append(decl)
+	# now go by parents...
+	# FIXME hmmm... there are 3 layers of tags, 2 possible levels
+	# of parents; do I bring everything to the top-most layer,
+	# or go iteratively or what?...
+	for parent,decls in parents.itervalues():
+		pass
+
 op = OptionParser()
 (Opts, Args) = op.parse_args()
 
