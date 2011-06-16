@@ -13,6 +13,9 @@ import fcntl, os, sys
 
 from ast import AstNode
 
+# TODO: rgb(r,g,b[,a])
+# TODO: hsl(%,%,%)
+# TODO: hsla(%,%,%,0.0)
 CSS_EBNF = r'''
 css      := toplevel*
 toplevel := rule/s
@@ -37,6 +40,7 @@ values   := value,(s?,value)*,s?
 value    := any/block
 any      := percent/dim/hash/expr/uri/string/filter/ident/num/inc/bareq/delim
 percent  := num,'%'
+# FIXME: wrong, dimensons are scalar; you were looking at font-size/line-height; '/' is a delimiter
 dim      := (num,ident),('/',num,ident)*
 hash     := '#',hex+
 uri      := url
