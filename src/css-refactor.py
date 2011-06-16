@@ -59,8 +59,9 @@ class Font:
 	def __init__(self): pass
 	def pre_process(self, prop):
 		# can't have line-height w/o font-size
-		if 'line-height' in prop and 'font-size' not in prop:
-			prop['font-size'] = Decl('font-size', [Inherit])
+		if 'line-height' in prop:
+			if 'font-size' not in prop:
+				prop['font-size'] = Decl('font-size', [Inherit])
 		return prop
 	def post_process(self, vals):
 		try:
