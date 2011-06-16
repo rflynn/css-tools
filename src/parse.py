@@ -5,7 +5,6 @@
 CSS parser
 """
 
-from simpleparse.common import numbers, strings, comments
 from simpleparse.parser import Parser
 from itertools import chain
 from sys import stdin
@@ -83,8 +82,6 @@ space    := [ \t\r\n\v\f]+
 comment  := '/*', commtext, '*/'
 commtext := -"*/"*
 '''
-
-def flatten(l): return list(chain.from_iterable(l))
 
 class Format:
 	"""Options for CSS formatting"""
