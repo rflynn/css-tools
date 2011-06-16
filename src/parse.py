@@ -318,18 +318,17 @@ class Decls:
 		#print 'Decls decls:', decls
 		nospace = filter_space(decls)
 		#print 'Decls nospace:', nospace
-		decl = map(Decl, nospace)
+		decl = map(Decl.make, nospace)
 		return Decls(decl)
 	def __add__(self, other):
 		return Decls(self.decl + other.decl)
 
 class Decl:
-	def __init__(self, ast):
+	def __init__(self, property_, values):
 		#print 'Decl ast:', ast
-		nospace = list(filter_space(ast.child))
-		prop,vals = nospace
-		self.property = prop.str
-		self.values = map(Value.make, filter_space(vals.child))
+		self.property = property_
+		self.propertylow = self.property.lower()
+		self.values = values
 	def __repr__(self):
 		return 'Decl(%s:%s)' % (self.property, self.values)
 	def format(self):
@@ -345,7 +344,19 @@ class Decl:
 			valstr += sp + v.format()
 		return	self.property + ':' + \
 			(' ' if Format.Decl.Value.LeadingSpace else '') + valstr
-	def __eq__(self, other): return self.values == other.values
+	def __eq__(self, other):
+		return self.propertylow == other.property and self.values == other.values
+	def __hash__(self): return hash(str(self.propertylow))
+	def __cmp__(self, other): return cmp(str(self), str(other))
+	@staticmethod
+	def make(ast):
+		"""generate a Decl from an AstNode"""
+		#print 'Decl ast:', ast
+		nospace = list(filter_space(ast.child))
+		prop,vals = nospace
+		d = Decl(prop.str, [])
+		d.values = map(Value.make, filter_space(vals.child))
+		return d
 
 class Value:
 	@staticmethod
@@ -355,7 +366,7 @@ class Value:
 			print 'ast:', ast
 			raise Exception('unsupported')
 		x = v.child[0]
-		if x.tag == 'ident':	return Ident(x)
+		if x.tag == 'ident':	return Ident.make(x)
 		elif x.tag == 'num':	return Number(x)
 		elif x.tag == 'percent':return Percent(x)
 		elif x.tag == 'string':	return String(x)
@@ -369,17 +380,19 @@ class Value:
 		assert False
 		return ast
 
-class Ident:
-	def __init__(self, ast): self.s = ast.child[0].str
+class Ident(object):
+	def __init__(self, s): self.s = s
 	def __repr__(self): return 'Ident(%s)' % (self.s,)
 	def format(self): return self.s
 	def __eq__(self, other): return type(other) == Ident and self.s == other.s
+	@staticmethod
+	def make(ast): return Ident(ast.child[0].str)
 
 class Number:
 	def __init__(self, ast):
 		self.s = ast.child[0].str
 		self.f = float(self.s)
-	def __repr__(self): return 'Num(%s)' % (self.s,)
+	def __repr__(self): return 'Number(%s)' % (self.s,)
 	def format(self): return self.s
 	def __eq__(self, other): return type(other) == Number and self.s == other.s
 
@@ -398,11 +411,11 @@ class Dimension:
 		self.vals = []
 		for i in range(0, len(ast.child), 2):
 			n, u = ast.child[i:i+2]
-			dim = (Number(n), Ident(u))
+			dim = (Number(n), Ident.make(u))
 			self.vals.append(dim)
 	def __repr__(self): return 'Dimension(%s)' % (self.vals,)
 	def format(self): return '/'.join(n.format() + u.format() for n,u in self.vals)
-	def __eq__(self, other): return type(other) == Dimension and self.vals == other.vals
+	def __eq__(self, other): return str(self) == str(other)
 
 class String:
 	def __init__(self, ast): self.s = ast.child[0].str
