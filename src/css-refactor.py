@@ -17,7 +17,7 @@ from collections import defaultdict
 from optparse import OptionParser
 
 import parse as cssparse
-from parse import Rule, Sels, Decls, Decl, Ident
+from parse import Rule, Sels, Decls, Decl, Ident, Delim
 
 
 def flatten(l): return list(chain.from_iterable(l))
@@ -40,24 +40,43 @@ Normal = Normal_()
 
 class Background:
 	def __init__(self): pass
+	def pre_process(self, prop): return prop
+	def post_process(self, vals): return vals
 
 class Border:
 	def __init__(self): pass
+	def pre_process(self, prop): return prop
+	def post_process(self, vals): return vals
 
 class Box:
 	"""Box parent properties require exactly 4 child values"""
 	def __init__(self, property_):
 		self.property = property_
+	def pre_process(self, prop): return prop
+	def post_process(self, vals): return vals
 
 class Font:
 	def __init__(self): pass
+	def pre_process(self, prop):
+		# can't have line-height w/o font-size
+		if 'line-height' in prop and 'font-size' not in prop:
+			prop['font-size'] = Decl('font-size', [Inherit])
+		return prop
+	def post_process(self, vals):
+		try:
+			fsi = [v.property for v in vals].index('font-size')
+			if vals[fsi+1].property == 'line-height':
+				vals.insert(fsi+1, Decl('line-height', [Delim('/')]))
+		except (ValueError, IndexError):
+			return vals
+		return vals
 
 class ListStyle:
 	def __init__(self): pass
+	def pre_process(self, prop): return prop
+	def post_process(self, vals): return vals
 
 PROPERTIES = {
-	# NOTE: default values, anywhere, may be omitted if they are the default
-
 	'background'		: (False, Background(),
 		[
 			'background-color',
@@ -170,41 +189,42 @@ PARENT = dict(flatten([[(child, prop) for child in children] for
 def properties_merge(parent, decl):
 	"""given a parent property string and a list of child decls,
 	generate the equivalent combined Decl for the parent"""
-	global PROPERTIES
 	if len(decl) < 2:
 		return None # don't bother merging < 2 children
 	inherited, merger, children = PROPERTIES[parent]
 	prop = dict((d.propertylow, d) for d in decl)
 	vals = []
+	prop2 = merger.pre_process(prop)
+	# insert Decl in order defined by parent
 	for c in children:
-		if c in prop:
-			v = prop[c].values
-			vals.extend(v)
+		if c in prop2:
+			vals.append(prop2[c])
 		else:
 			inherit, default, _ = PROPERTIES[c]
 			if inherit:
 				pass # value can be omitted
 			elif default:
-				vals.append(default)
+				vals.append(Decl(c, [default]))
 			else:
-				# if the value is not present, does not inherit...
-				# and has no automatic default we cannot produce an
-				# equivalent parent Decl, bail
+				# no value, no inheritance, no default. bail.
 				return None
-	if len(vals) == 4 and isinstance(merger, Box):
-		# "If one or more of the values are not present, the value for a missing side is taken
-		# from the opposite side that is present. If only one value is listed, it applies to all sides."
-		# Ref: http://www.blooberry.com/indexdot/css/properties/padding/padding.htm
-		#print '%s == %s: %s' % (vals[0], vals[1], vals[0] == vals[1])
-		if vals[0] == vals[1] and vals[0] == vals[2] and vals[0] == vals[3]:
-			# in the box model you've got four sides; if 4 identical child values exist
-			# then it must be border/padding/margin and we can reduce to 1
-			vals = vals[:1]
-		elif vals[1] == vals[3]:
-			# if the left and right values are equal we can omit the right side
-			vals = vals[:3]
 	if not vals:
 		return None # couldn't merge
+	vals = merger.post_process(vals)
+	# we no longer need the Decl properties; strip Decl into values
+	vals = flatten([d.values for d in vals])
+	if len(vals) == 4 and isinstance(merger, Box):
+		if vals[0] == vals[2]:
+			if vals[1] == vals[3]:
+				if vals[0] == vals[1]:
+					# [top, right, bottom, left] -> [top/right/bottom/left]
+					vals = vals[:1]
+				else:
+					# [top, right, bottom, left] -> [top/bottom, left/right]
+					vals = vals[:2]
+			else:
+				# [top, right, bottom, left] -> [top, left/right, bottom]
+				vals = vals[:3]
 	return Decl(parent, vals)
 
 def decls_property_combine(block):
@@ -302,10 +322,12 @@ identical_decls = dict((d, sorted(s))
 	for d, s in identical_decls.items())
 # TODO: css string sort: # * < [a-zA-Z_] < # < . < '-'
 for d, s in sorted(identical_decls.items(), key=lambda x:x[1]):
-	d.decl = sorted(d.decl)
+	# eliminate identical decls and sort
+	d.decl = sorted(list(set(d.decl)))
 	#print s, d
 	r = Rule(Sels(s), d)
-	print r.format()
+	if r.decls.decl:
+		print r.format()
 
 """
 rules_with_dupes = list(decl_find_duplicate_properties(doc))
