@@ -298,7 +298,11 @@ identical_decls = defaultdict(list)
 #print foo
 for s, d in foo:
 	identical_decls[d].append(s)
-for d, s in identical_decls.items():
+identical_decls = dict((d, sorted(s))
+	for d, s in identical_decls.items())
+# TODO: css string sort: # * < [a-zA-Z_] < # < . < '-'
+for d, s in sorted(identical_decls.items(), key=lambda x:x[1]):
+	d.decl = sorted(d.decl)
 	#print s, d
 	r = Rule(Sels(s), d)
 	print r.format()
