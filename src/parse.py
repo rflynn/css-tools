@@ -21,6 +21,8 @@ toplevel := rule/s
 rule     := sels?,block
 sels     := sel,(s?,',',s?,sel)*,s?
 sel      := sel_tagop,(s?,sel_tagop)*
+# FIXME: WRONG! parses #a.b as #a .b
+# TODO: remove Sel_Tag and make everything a Sel_Op; group Sel_Ops by spacing explicitly
 sel_tagop:= (sel_tag,sel_op?)/(sel_tag?,sel_op)
 sel_tag  := ident/sel_univ
 sel_univ := '*'
@@ -162,13 +164,13 @@ class CSSDoc:
 class TopLevel:
 	def __init__(self, ast):
 		self.ast = ast
-		self.contents = TopLevel.make(ast)
+		self.contents = TopLevel.from_ast(ast)
 	def __repr__(self):
 		return str(self.contents)
 	@staticmethod
-	def make(ast):
+	def from_ast(ast):
 		if ast.tag == 'rule':
-			return Rule(ast)
+			return Rule.from_ast(ast)
 		elif ast.tag == 's':
 			if ast.child[0].child:
 				return Comment(ast)
@@ -178,14 +180,11 @@ class TopLevel:
 		return self.contents.format()
 
 class Rule:
-	def __init__(self, ast):
+	def __init__(self, sels, decls):
 		#print 'Rule ast:', ast
 		#print 'Rule tag:', ast.child[0].tag
-		if ast.child[0].tag == 'sels':
-			self.sels = Sels(ast.child.pop(0))
-		else:
-			self.sels = Sels.Empty()
-		self.decls = Decls.build(ast.child[0])
+		self.sels = sels
+		self.decls = decls
 	def __repr__(self):
 		return 'Rule(%s,%s)' % (self.sels, self.decls)
 	def format(self):
@@ -194,6 +193,14 @@ class Rule:
 			selstr += ' '
 		nl = '\n' if not Format.Minify else ''
 		return selstr + self.decls.format() + nl
+	@staticmethod
+	def from_ast(ast):
+		if ast.child[0].tag == 'sels':
+			sels = Sels.from_ast(ast.child.pop(0))
+		else:
+			sels = Sels.Empty()
+		decls = Decls.from_ast(ast.child[0])
+		return Rule(sels, decls)
 
 class Comment:
 	def __init__(self, ast):
@@ -220,23 +227,27 @@ class Whitespace:
 		return s
 
 class Sels:
-	def __init__(self, ast):
+	def __init__(self, sel):
 		#print 'Sels ast:', ast
-		self.sel = map(Sel, filter_space(ast.child))
+		self.sel = sel
 	def __repr__(self):
 		return 'Sels(' + ','.join(map(str,self.sel)) + ')'
 	def format(self):
 		j = ',' + (' ' if not Format.Minify else '')
 		return j.join(s.format() for s in self.sel)
 	@staticmethod
+	def from_ast(ast):
+		sel = map(Sel.from_ast, filter_space(ast.child))
+		return Sels(sel)
+	@staticmethod
 	def Empty():
 		# fudge an empty Sels
-		return Sels(AstNode.Empty())
+		return Sels.from_ast(AstNode.Empty())
 
 class Sel:
-	def __init__(self, ast):
+	def __init__(self, sel):
 		#print 'Sel ast:', ast
-		self.sel = map(Sel.build, filter_space(ast.child))
+		self.sel = sel#map(Sel.from_ast, filter_space(ast.child))
 		#print 'Sel.sel:', self.sel
 	def __repr__(self):
 		return 'Sel(' + ','.join(map(str,self.sel)) + ')'
@@ -246,14 +257,17 @@ class Sel:
 		"""is this selector free of complex operators?"""
 		return False
 	@staticmethod
-	def build(ast):
-		#print 'Sel.make ast:', ast
+	def from_ast(ast):
+		sel = map(Sel.from_ast_tagop, filter_space(ast.child))
+		return Sel(sel)
+	@staticmethod
+	def from_ast_tagop(ast):
+		#print 'Sel.from_ast ast:', ast
 		skip_tagop = ast.child[0]
-		#print 'Sel.make skip_tagop:', skip_tagop
+		#print 'Sel.from_ast skip_tagop:', skip_tagop
 		return [Sel_Tag(c) if c.tag == 'sel_tag' else Sel_Op(c)
 			for c in ast.child]
 	def __hash__(self):
-		"""we want equality by value, not object, for dictionaries"""
 		return hash(str(self))
 	def __cmp__(self, other):
 		return cmp(str(self), str(other))
@@ -310,15 +324,19 @@ class Decls:
 			le.join(nd + d.format() for d in self.decl) + \
 			(';' if Format.Decl.LastSemi and not Format.Minify else '') + nl + \
 			'}'
+	def __hash__(self):
+		return hash(str(sorted(self.decl)))
+	def __cmp__(self, other):
+		return cmp(str(sorted(self.decl)), str(sorted(other.decl)))
 	@staticmethod
-	def build(ast):
+	def from_ast(ast):
 		"""build Decls() from an AstNode"""
 		#print 'Decls ast:', ast
 		decls = list(filter_space(ast.child))[0].child
 		#print 'Decls decls:', decls
 		nospace = filter_space(decls)
 		#print 'Decls nospace:', nospace
-		decl = map(Decl.make, nospace)
+		decl = map(Decl.from_ast, nospace)
 		return Decls(decl)
 	def __add__(self, other):
 		return Decls(self.decl + other.decl)
@@ -335,13 +353,17 @@ class Decl:
 		# decl values need spaces between them even in Minify, with a few exceptions
 		valstr = self.values[0].format()
 		prevNoSpace = False # set by values to tell next one it doesn't need a space
+		prev = None
 		for v in self.values[1:]:
-			sp = ' '
-			isDelim = Format.Minify and isinstance(v, Delim)
-			if prevNoSpace or isDelim:
-				sp = ''
-			prevNoSpace = isDelim or isinstance(v, Uri)
+			# the rules for required inter-value spaces are a little tricky
+			currNoSpace = isinstance(v, Delim) and (Format.Minify or not v.leading_space())
+			prevNoSpace = prev and \
+				((Format.Minify and \
+					(isinstance(prev, Uri) or isinstance(prev, Delim)))
+				 or (isinstance(prev, Delim) and not prev.trailing_space()))
+			sp = '' if currNoSpace or prevNoSpace else ' '
 			valstr += sp + v.format()
+			prev = v
 		return	self.property + ':' + \
 			(' ' if Format.Decl.Value.LeadingSpace else '') + valstr
 	def __eq__(self, other):
@@ -349,24 +371,24 @@ class Decl:
 	def __hash__(self): return hash(str(self.propertylow))
 	def __cmp__(self, other): return cmp(str(self), str(other))
 	@staticmethod
-	def make(ast):
+	def from_ast(ast):
 		"""generate a Decl from an AstNode"""
 		#print 'Decl ast:', ast
 		nospace = list(filter_space(ast.child))
 		prop,vals = nospace
 		d = Decl(prop.str, [])
-		d.values = map(Value.make, filter_space(vals.child))
+		d.values = map(Value.from_ast, filter_space(vals.child))
 		return d
 
 class Value:
 	@staticmethod
-	def make(ast):
+	def from_ast(ast):
 		v = ast.child[0]
 		if v.tag != 'any':
 			print 'ast:', ast
 			raise Exception('unsupported')
 		x = v.child[0]
-		if x.tag == 'ident':	return Ident.make(x)
+		if x.tag == 'ident':	return Ident.from_ast(x)
 		elif x.tag == 'num':	return Number(x)
 		elif x.tag == 'percent':return Percent(x)
 		elif x.tag == 'string':	return String(x)
@@ -376,7 +398,7 @@ class Value:
 		elif x.tag == 'expr':	return Expression(x)
 		elif x.tag == 'uri':	return Uri(x)
 		elif x.tag == 'filter':	return Filter(x)
-		print 'Value.make.x:', x
+		print 'Value.from_ast.x:', x
 		assert False
 		return ast
 
@@ -386,7 +408,7 @@ class Ident(object):
 	def format(self): return self.s
 	def __eq__(self, other): return type(other) == Ident and self.s == other.s
 	@staticmethod
-	def make(ast): return Ident(ast.child[0].str)
+	def from_ast(ast): return Ident(ast.child[0].str)
 
 class Number:
 	def __init__(self, ast):
@@ -411,7 +433,7 @@ class Dimension:
 		self.vals = []
 		for i in range(0, len(ast.child), 2):
 			n, u = ast.child[i:i+2]
-			dim = (Number(n), Ident.make(u))
+			dim = (Number(n), Ident.from_ast(u))
 			self.vals.append(dim)
 	def __repr__(self): return 'Dimension(%s)' % (self.vals,)
 	def format(self): return '/'.join(n.format() + u.format() for n,u in self.vals)
@@ -427,6 +449,10 @@ class Delim:
 	def __init__(self, ast): self.s = ast.str
 	def __repr__(self): return 'Delim(%s)' % (self.s,)
 	def format(self): return self.s
+	def leading_space(self):
+		return self.s in ('!',)
+	def trailing_space(self):
+		return self.s in (',',)
 	def __eq__(self, other): return type(other) == Delim and self.s == other.s
 
 class Hash:
@@ -467,7 +493,6 @@ class Color:
 			s = rgb6
 		if s[:1] == '#':
 			if len(sl) == 7 and sl[1] == sl[2] and sl[3] == sl[4] and sl[5] == sl[6]:
-				print '7'
 				rgb6 = sl
 				rgb3 = '#' + sl[1] + sl[3] + sl[5]
 			elif len(s) == 4:
