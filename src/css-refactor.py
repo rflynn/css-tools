@@ -12,19 +12,31 @@ then, merge any 2+ sub-properties into their common parent
 """
 
 import sys
+from itertools import chain
+from collections import defaultdict
 from optparse import OptionParser
 
 import parse as cssparse
-from parse import Color, Uri, Percent, Number
+from parse import Decl, Ident
 
-class Inherit:
-	def __init__(self): pass
 
-class Auto:
-	def __init__(self): pass
+def flatten(l): return list(chain.from_iterable(l))
 
-class Normal:
-	def __init__(self): pass
+class Inherit_(Ident):
+	def __init__(self):
+		super(self.__class__, self).__init__('inherit')
+
+class Auto_(Ident):
+	def __init__(self):
+		super(self.__class__, self).__init__('auto')
+
+class Normal_(Ident):
+	def __init__(self):
+		super(self.__class__, self).__init__('normal')
+
+Inherit = Inherit_()
+Auto = Auto_()
+Normal = Normal_()
 
 class Background:
 	def __init__(self): pass
@@ -32,37 +44,21 @@ class Background:
 class Border:
 	def __init__(self): pass
 
-class BorderWidth:
-	def __init__(self): pass
-
-class BorderStyle:
-	def __init__(self): pass
-
-class BorderColor:
-	def __init__(self): pass
+class Box:
+	"""Box parent properties require exactly 4 child values"""
+	def __init__(self, property_):
+		self.property = property_
 
 class Font:
-	def __init__(self): pass
-
-class Margin:
-	def __init__(self): pass
-
-class Padding:
 	def __init__(self): pass
 
 class ListStyle:
 	def __init__(self): pass
 
-class Property:
-	def __init__(self, name, inherited, values, children):
-		pass
+PROPERTIES = {
+	# NOTE: default values, anywhere, may be omitted if they are the default
 
-PROPERTIES = [
-	"""
-	NOTE: default values, anywhere, may be omitted if they are the default
-	"""
-
-	('background', 		False,	Background,
+	'background'		: (False, Background(),
 		[
 			'background-color',
 			'background-image',
@@ -70,52 +66,52 @@ PROPERTIES = [
 			'background-attachment',
 			'background-position',
 		]),
-	('background-color',	False,	None, []),
-	('background-image',	False,	None, []),
-	('background-repeat',	False,	None, []),
-	('background-attachment',False,	None, []),
+	'background-color'	: (False, None, []),
+	'background-image'	: (False, None, []),
+	'background-repeat'	: (False, None, []),
+	'background-attachment'	: (False, None, []),
 
-	('border',		False,	Border,
+	'border'		: (False, Border(),
 		[
 			'border-width',
 			'border-style',
 			'border-color',
 		]),
-	('border-width',	False,	BorderWidth,
+	'border-width'		: (False, Box('border-width'),
 		[
 			'border-top-width',
 			'border-right-width',
 			'border-bottom-width',
 			'border-left-width',
 		]),
-	('border-top-width',	False,	None, []),
-	('border-right-width',	False,	None, []),
-	('border-bottom-width',	False,	None, []),
-	('border-left-width',	False,	None, []),
-	('border-style',	False,	BorderStyle,
+	'border-top-width'	: (False, None, []),
+	'border-right-width'	: (False, None, []),
+	'border-bottom-width'	: (False, None, []),
+	'border-left-width'	: (False, None, []),
+	'border-style'		: (False, Box('border-style'),
 		[
 			'border-top-style',
 			'border-right-style',
 			'border-bottom-style',
 			'border-left-style',
 		]),
-	('border-top-style',	False,	None, []),
-	('border-right-style',	False,	None, []),
-	('border-bottom-style',	False,	None, []),
-	('border-left-style',	False,	None, []),
-	('border-color',	False,	BorderColor,
+	'border-top-style'	: (False, None, []),
+	'border-right-style' 	: (False, None, []),
+	'border-bottom-style'	: (False, None, []),
+	'border-left-style'	: (False, None, []),
+	'border-color' 		: (False, Box('border-color'),
 		[
 			'border-top-color',
 			'border-right-color',
 			'border-bottom-color',
 			'border-left-color',
 		]),
-	('border-top-color',	False,	None, []),
-	('border-right-color',	False,	None, []),
-	('border-bottom-color',	False,	None, []),
-	('border-left-color',	False,	None, []),
+	'border-top-color'	: (False, None, []),
+	'border-right-color'	: (False, None, []),
+	'border-bottom-color'	: (False, None, []),
+	'border-left-color'	: (False, None, []),
 
-	('font', 		True,	Font,
+	'font'			: (True, Font(),
 		[
 			'font-style',
 			'font-variant',
@@ -124,50 +120,129 @@ PROPERTIES = [
 			'line-height',
 			'font-family',
 		]),
-	('font-style',		True,	Normal, []),
-	('font-variant',	True,	Normal, []),
-	('font-weight',		True,	Normal, []),
-	('font-size',		True,	Inherit, []),
-	('line-height',		True,	Inherit, []),
-	('font-family',		True,	Inherit, []),
+	'font-style'		: (True, Normal,  []),
+	'font-variant'		: (True, Normal,  []),
+	'font-weight'		: (True, Normal,  []),
+	'font-size'		: (True, Inherit, []),
+	'line-height'		: (True, Inherit, []),
+	'font-family'		: (True, Inherit, []),
 
-	('margin', 		False,	Margin,
+	'margin'		: (False, Box('margin'),
 		[
 			'margin-top',
 			'margin-right',
 			'margin-bottom',
 			'margin-left',
 		]),
-	('margin-top',		False,	Auto, []),
-	('margin-right',	False,	Auto, []),
-	('margin-bottom',	False,	Auto, []),
-	('margin-left',		False,	Auto, []),
+	'margin-top'		: (False, Auto, []),
+	'margin-right'		: (False, Auto, []),
+	'margin-bottom'		: (False, Auto, []),
+	'margin-left'		: (False, Auto, []),
 
-	('padding', 		False,	Padding,
+	'padding'		: (False, Box('padding'),
 		[
 			'padding-top',
 			'padding-right',
 			'padding-bottom',
 			'padding-left',
 		]),
-	('padding-top',		False,	Auto, []),
-	('padding-right',	False,	Auto, []),
-	('padding-bottom',	False,	Auto, []),
-	('padding-left',	False,	Auto, []),
+	'padding-top'		: (False, Auto, []),
+	'padding-right'		: (False, Auto, []),
+	'padding-bottom'	: (False, Auto, []),
+	'padding-left'		: (False, Auto, []),
 
-	('list-style', 		True,	ListStyle,
+	'list-style'		: (True, ListStyle(),
 		[
 			'list-style-type',
 			'list-style-position',
 			'list-style-image',
 		]),
-	('list-style-type',	True,	Inherit, []),
-	('list-style-position',	True,	Inherit, []),
-	('list-style-image',	True,	Inherit, []),
+	'list-style-type'	: (True, Inherit, []),
+	'list-style-position'	: (True, Inherit, []),
+	'list-style-image'	: (True, Inherit, []),
 
-]
+}
 
-def decl_find_duplicate_properties(doc):
+# reverse lookup
+PARENT = dict(flatten([[(child, prop) for child in children] for
+		prop,(inherited,default,children) in PROPERTIES.items()]))
+
+def properties_merge(parent, decl):
+	"""given a parent property string and a list of child decls,
+	generate the equivalent combined Decl for the parent"""
+	global PROPERTIES
+	if len(decl) < 2:
+		return None # don't bother merging < 2 children
+	inherited, merger, children = PROPERTIES[parent]
+	prop = dict((d.propertylow, d) for d in decl)
+	if len(prop) != len(decl):
+		return None # at least one duplicated, go no further
+
+	vals = []
+	for c in children:
+		if c in prop:
+			v = prop[c].values
+			vals.extend(v)
+		else:
+			inherit, default, _ = PROPERTIES[c]
+			if inherit:
+				pass # value can be omitted
+			elif default:
+				vals.append(default)
+			else:
+				# if the value is not present, does not inherit...
+				# and has no automatic default we cannot produce an
+				# equivalent parent Decl, bail
+				print "can't merge child:", c
+				return None
+	print 'vals:', vals
+	if len(vals) == 4 and isinstance(merger, Box):
+		# "If one or more of the values are not present, the value for a missing side is taken
+		# from the opposite side that is present. If only one value is listed, it applies to all sides."
+		# Ref: http://www.blooberry.com/indexdot/css/properties/padding/padding.htm
+		#print '%s == %s: %s' % (vals[0], vals[1], vals[0] == vals[1])
+		if vals[0] == vals[1] and vals[0] == vals[2] and vals[0] == vals[3]:
+			# in the box model you've got four sides; if 4 identical child values exist
+			# then it must be border/padding/margin and we can reduce to 1
+			vals = vals[:1]
+		elif vals[1] == vals[3]:
+			# if the left and right values are equal we can omit the right side
+			vals = vals[:3]
+	if not vals:
+		return None # couldn't merge
+	return Decl(parent, vals)
+
+def decls_property_combine(block):
+	# merge decl based on property parents
+	prop = defaultdict(list)
+	parents = defaultdict(list)
+	for decl in block.decl:
+		prop[decl.property].append(decl)
+		if decl.property in PARENT:
+			parent = PARENT[decl.property]
+			if parent:
+				parents[parent].append(decl)
+	# now go by parents...
+	# FIXME hmmm... there are 3 layers of tags, 2 possible levels
+	# of parents; do I bring everything to the top-most layer,
+	# or go iteratively or what?...
+	for parent, decls in parents.iteritems():
+		if parent in prop:
+			# parent exists in the decl also; skip it for now
+			continue
+		merged = properties_merge(parent, decls)
+		if merged:
+			# remove merged children from prop
+			for d in decls:
+				del prop[d.property]
+			# add new parent
+			prop[merged.property].append(merged)
+			#print 'decls_property_combine merged:', merged.format(), merged
+	block.decl = [v[0] for v in prop.values()]
+	#print 'decls_property_combine block:', block
+	return block 
+
+def decls_find_duplicate_properties(doc):
 	"""
 	not so easy; there are browser hacks out there that require this. be smarter.
 	"""
@@ -177,7 +252,7 @@ def decl_find_duplicate_properties(doc):
 		if len(d) != len(decls):
 			yield (r, len(decls) - len(d))
 
-def selectors_merge_identical(doc):
+def selectors_merge(doc):
 	"""
 	for each unique selector:
 		merge all specified decls
@@ -190,29 +265,7 @@ def selectors_merge_identical(doc):
 				sel_decls[sel] += r.decls
 			except KeyError:
 				sel_decls[sel] = r.decls
-	print sel_decls
-	for k,v in sel_decls.items():
-		print k.format(), v.format()
-
-"""
-algorithm given PROPERTIES[property] = {name, inherited, default, children}
-the goal of which is to combine properties into parent properties in order
-which often (but not always) produce shorter equivalent code
-"""
-from collections import defaultdict
-def property_combine(decls):
-	# merge decl based on property parents
-	parents = defaultdict(list)
-	for decl in decls.decls:
-		parent = PROPERTIES[decl.property].parent
-		if parent:
-			parents[parent].append(decl)
-	# now go by parents...
-	# FIXME hmmm... there are 3 layers of tags, 2 possible levels
-	# of parents; do I bring everything to the top-most layer,
-	# or go iteratively or what?...
-	for parent,decls in parents.itervalues():
-		pass
+	return sel_decls
 
 op = OptionParser()
 (Opts, Args) = op.parse_args()
@@ -232,7 +285,12 @@ print doc.rules
 
 cssparse.Format.canonical()
 
-selectors_merge_identical(doc)
+sels_merged = selectors_merge(doc)
+print sels_merged
+for sel, decls in sels_merged.items():
+	dcomb = decls_property_combine(decls)
+	print sel.format(), dcomb.format()
+
 
 """
 rules_with_dupes = list(decl_find_duplicate_properties(doc))
