@@ -15,6 +15,157 @@ import sys
 from optparse import OptionParser
 
 import parse as cssparse
+from parse import Color, Uri, Percent, Number
+
+class Inherit:
+	def __init__(self): pass
+
+class Auto:
+	def __init__(self): pass
+
+class Normal:
+	def __init__(self): pass
+
+class Background:
+	def __init__(self): pass
+
+class Border:
+	def __init__(self): pass
+
+class BorderWidth:
+	def __init__(self): pass
+
+class BorderStyle:
+	def __init__(self): pass
+
+class BorderColor:
+	def __init__(self): pass
+
+class Font:
+	def __init__(self): pass
+
+class Margin:
+	def __init__(self): pass
+
+class Padding:
+	def __init__(self): pass
+
+class ListStyle:
+	def __init__(self): pass
+
+class Property:
+	def __init__(self, name, inherited, values, children):
+		pass
+
+PROPERTIES = [
+	"""
+	NOTE: default values, anywhere, may be omitted if they are the default
+	"""
+
+	('background', 		False,	Background,
+		[
+			'background-color',
+			'background-image',
+			'background-repeat',
+			'background-attachment',
+			'background-position',
+		]),
+	('background-color',	False,	None, []),
+	('background-image',	False,	None, []),
+	('background-repeat',	False,	None, []),
+	('background-attachment',False,	None, []),
+
+	('border',		False,	Border,
+		[
+			'border-width',
+			'border-style',
+			'border-color',
+		]),
+	('border-width',	False,	BorderWidth,
+		[
+			'border-top-width',
+			'border-right-width',
+			'border-bottom-width',
+			'border-left-width',
+		]),
+	('border-top-width',	False,	None, []),
+	('border-right-width',	False,	None, []),
+	('border-bottom-width',	False,	None, []),
+	('border-left-width',	False,	None, []),
+	('border-style',	False,	BorderStyle,
+		[
+			'border-top-style',
+			'border-right-style',
+			'border-bottom-style',
+			'border-left-style',
+		]),
+	('border-top-style',	False,	None, []),
+	('border-right-style',	False,	None, []),
+	('border-bottom-style',	False,	None, []),
+	('border-left-style',	False,	None, []),
+	('border-color',	False,	BorderColor,
+		[
+			'border-top-color',
+			'border-right-color',
+			'border-bottom-color',
+			'border-left-color',
+		]),
+	('border-top-color',	False,	None, []),
+	('border-right-color',	False,	None, []),
+	('border-bottom-color',	False,	None, []),
+	('border-left-color',	False,	None, []),
+
+	('font', 		True,	Font,
+		[
+			'font-style',
+			'font-variant',
+			'font-weight',
+			'font-size',
+			'line-height',
+			'font-family',
+		]),
+	('font-style',		True,	Normal, []),
+	('font-variant',	True,	Normal, []),
+	('font-weight',		True,	Normal, []),
+	('font-size',		True,	Inherit, []),
+	('line-height',		True,	Inherit, []),
+	('font-family',		True,	Inherit, []),
+
+	('margin', 		False,	Margin,
+		[
+			'margin-top',
+			'margin-right',
+			'margin-bottom',
+			'margin-left',
+		]),
+	('margin-top',		False,	Auto, []),
+	('margin-right',	False,	Auto, []),
+	('margin-bottom',	False,	Auto, []),
+	('margin-left',		False,	Auto, []),
+
+	('padding', 		False,	Padding,
+		[
+			'padding-top',
+			'padding-right',
+			'padding-bottom',
+			'padding-left',
+		]),
+	('padding-top',		False,	Auto, []),
+	('padding-right',	False,	Auto, []),
+	('padding-bottom',	False,	Auto, []),
+	('padding-left',	False,	Auto, []),
+
+	('list-style', 		True,	ListStyle,
+		[
+			'list-style-type',
+			'list-style-position',
+			'list-style-image',
+		]),
+	('list-style-type',	True,	Inherit, []),
+	('list-style-position',	True,	Inherit, []),
+	('list-style-image',	True,	Inherit, []),
+
+]
 
 def decl_find_duplicate_properties(doc):
 	"""
