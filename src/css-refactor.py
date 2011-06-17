@@ -351,13 +351,8 @@ for d, s in sorted(identical_decls.items(), \
 	#print s, d
 	r = Rule(Sels(s), d)
 	if r.decls.decl:
-		print r.format()
-
-"""
-rules_with_dupes = list(decl_find_duplicate_properties(doc))
-if rules_with_dupes:
-	print '/* !!! Duplicate decl properties !!! */'
-	for r, dupecnt in rules_with_dupes:
-		print r.format()
-"""
+		if cnt:
+			print '\n'
+		print r.format().rstrip()
+		cnt += 1
 
