@@ -582,17 +582,17 @@ if __name__ == '__main__':
 	'* html{}',
 	'html .jqmWindow{}',
 	"""#under_scores a{color:#000;}""",
-	#'a,b{c:d;e:f}',
+	'a,b{c:d;e:f}',
 	'a b.c{d:e}',
-	#'*.b.c.d{c:d}',
-	#'a{b:c}d{e:f}',
+	'*.b.c.d{c:d}',
+	'a{b:c}d{e:f}',
 	'a{b:c}\r\nd{e:f}',
 	"{hash:#333}",
 	"""{string:""}""",
 	"""{empty-url:url()}""",
 	"""{a-url:url(a)}""",
 	"""{foo-url:url(http://foo)}""",
-	#'h1,h2{font-family:Arial,Heletica,sans-serif}',
+	'h1,h2{font-family:Arial,Heletica,sans-serif}',
 	'body{background-position:center 118px !important;font:normal 13px/1.2em Arial, Helvetica, sans-serif;margin:0;padding:0;}',
 	'a:hover{text-decoration:underline;}', # psuedo class
 	'span.ns{text-indent:-9000px;a:b}', # negative numbers
@@ -618,22 +618,34 @@ if __name__ == '__main__':
 	""".-sh-iwiw .-sh-but a{background-position:-112px -48px;}""",
 	"""#selector_attributes .title[class] h3,#foo #Bar #baz .title[class] h3{background:url(http://image.png) no-repeat;}""",
 	"""{filter:progid()}""",
-	"""filter-yay{filter:progid:DXImageTransform.Microsoft.AlphaImageLoader()}""",
-	"""filter-yay{filter:progid:DXImageTransform.Microsoft.AlphaImageLoader(enabled='true')}""",
 	"""filter-yay{filter:progid:DXImageTransform.Microsoft.AlphaImageLoader(enabled='true', sizingMethod='img',src='http://image.jpg')}""",
+	'''@import "foo";''',
+	'@import url();',
+	'@import url("foo") bar, baz;',
+	'@page foo;',
 	]
 
 	# read from stdin if it's available
 	try:
 		fcntl.fcntl(0, fcntl.F_SETFL, os.O_NONBLOCK) # stdin non-blocking
 		foo = stdin.read()
-		CSS_TESTS = [foo]
-	except:
-		pass
-
-	for t in CSS_TESTS:
-		doc = CSSDoc.parse(t)
+		doc = CSSDoc.parse(foo)
 		print 'ast:', doc.ast
 		print 'parse tree:', doc
-		print doc.format()
-		#print 'doc.rules:', doc.rules
+		print 'formatted:', doc.format()
+		exit(0)
+	except IOError:
+		# nothing to read
+		pass
+
+	print 'Testing parser...'
+
+	for t in CSS_TESTS:
+		try:
+			doc = CSSDoc.parse(t)
+		except:
+			print t
+			print sys.exc_info()
+
+	print 'Tests passed (%u)' % len(CSS_TESTS)
+
