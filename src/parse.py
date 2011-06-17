@@ -548,9 +548,17 @@ class Expression:
 	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class Uri:
-	def __init__(self, ast): self.s = ast.str
+	def __init__(self, ast):
+		self.ast = ast
+		self.s = ast.child[0].child[0].child[0]
 	def __repr__(self): return 'Uri(%s)' % self.s
-	def format(self): return self.s
+	def format(self):
+		url = self.s.str
+		if Format.Minify \
+			and self.s.tag in ('string','sqstring') \
+			and url.find(')') == -1:
+			url = url[1:-1]
+		return 'url(%s)'  % url
 	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class Filter:
