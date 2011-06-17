@@ -513,10 +513,10 @@ class Color:
 		name, rgb3, rgb6 = None, None, None
 		sl = s.lower()
 		if sl in Color.KEYWORDS:
-			name = s.lower()
+			name = sl
 			rgb6 = Color.KEYWORDS[name]
-			s = rgb6
-		if s[:1] == '#':
+			sl = rgb6
+		if sl[:1] == "#":
 			if len(sl) == 7 and sl[1] == sl[2] and sl[3] == sl[4] and sl[5] == sl[6]:
 				rgb6 = sl
 				rgb3 = '#' + sl[1] + sl[3] + sl[5]
