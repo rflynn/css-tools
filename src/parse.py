@@ -44,7 +44,7 @@ decl     := property,s?,':',s?,values
 property := name
 values   := value,(s?,value)*,s?
 value    := any/block
-any      := percent/dim/hash/expr/uri/string/filter/ident/num/inc/bareq/delim
+any      := percent/dim/hash/expr/uri/string/sqstring/filter/ident/num/inc/bareq/delim
 percent  := num,'%'
 dim      := num,ident
 hash     := '#',hex+
@@ -421,7 +421,8 @@ class Value:
 			return Ident.from_ast(c)
 		elif x.tag == 'num':	return Number(x)
 		elif x.tag == 'percent':return Percent(x)
-		elif x.tag == 'string':	return String(x)
+		elif x.tag == 'string':	return String(x, '"')
+		elif x.tag == 'sqstring':return String(x, "'")
 		elif x.tag == 'hash':	return Hash(x)
 		elif x.tag == 'dim':	return Dimension(x)
 		elif x.tag == 'delim':	return Delim.from_ast(x)
@@ -467,9 +468,11 @@ class Dimension:
 	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class String:
-	def __init__(self, ast): self.s = ast.child[0].str
-	def __repr__(self): return self.s
-	def format(self): return self.s
+	def __init__(self, ast, q):
+		self.q = q
+		self.s = ast.child[0].str
+	def __repr__(self): return self.q + self.s + self.q
+	def format(self): return self.q + self.s + self.q
 	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class Delim:
