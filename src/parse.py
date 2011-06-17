@@ -112,7 +112,7 @@ class Format:
 			LeadingSpace = False
 		LastSemi = True
 		OnePerLine = True
-		NewLine = '\r\n' # TODO: detect Windows/UNIX line endings
+		NewLine = '\n' # TODO: detect Windows/UNIX line endings
 	@staticmethod
 	def canonical():
 		Format.Stack.append('canonical')
