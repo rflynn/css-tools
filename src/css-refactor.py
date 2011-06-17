@@ -19,8 +19,26 @@ from optparse import OptionParser
 import parse as cssparse
 from parse import Rule, Sels, Decls, Decl, Ident, Delim
 
-
 def flatten(l): return list(chain.from_iterable(l))
+
+# css string sort: # '@' < '*' < [a-zA-Z_] < '#' < '.' < '-'
+FIRSTCHAR = {
+	'.' : 0xffffffff,
+	'#' : 0xfffffffe,
+	'-' : 0xfffffffd,
+	'*' : -1,
+	'@' : -2,
+}
+def css_strcmp(x, y):
+	x = str(x)
+	y = str(y)
+	if len(x) > 0 and len(y) > 0:
+		global FIRSTCHAR
+		x0 = FIRSTCHAR.get(x[0], ord(x[0]))
+		y0 = FIRSTCHAR.get(y[0], ord(y[0]))
+		if x0 != y0:
+			return x0 - y0
+	return cmp(x, y)
 
 class Inherit_(Ident):
 	def __init__(self):
@@ -314,17 +332,22 @@ for sel, decls in sels_merged.items():
 # merge selectors having identical decls
 # TODO: would be better if we identified subsets of decls that were longer than their selector name,
 # then merged those, breaking decls up
-#foo = sorted(
 identical_decls = defaultdict(list)
 #print foo
 for s, d in foo:
 	identical_decls[d].append(s)
 identical_decls = dict((d, sorted(s))
 	for d, s in identical_decls.items())
-# TODO: css string sort: # * < [a-zA-Z_] < # < . < '-'
-for d, s in sorted(identical_decls.items(), key=lambda x:x[1]):
+
+for at in doc.atrules:
+	print at.format()
+
+cnt = 0
+for d, s in sorted(identical_decls.items(), \
+		key=lambda x:x[1], \
+		cmp=lambda x,y: css_strcmp(x[0].format(), y[0].format())):
 	# eliminate identical decls and sort
-	d.decl = sorted(list(set(d.decl)))
+	d.decl = sorted(list(set(d.decl)), cmp=lambda x,y: css_strcmp(x.property, y.property))
 	#print s, d
 	r = Rule(Sels(s), d)
 	if r.decls.decl:
