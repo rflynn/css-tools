@@ -412,7 +412,11 @@ class Value:
 			print 'ast:', ast
 			raise Exception('unsupported: ' + str(v.tag))
 		x = v.child[0]
-		if x.tag == 'ident':	return Ident.from_ast(x.child[0])
+		if x.tag == 'ident':
+			c = x.child[0]
+			if c.str.lower() in Color.KEYWORDS:
+				return Color(c.str)
+			return Ident.from_ast(c)
 		elif x.tag == 'num':	return Number(x)
 		elif x.tag == 'percent':return Percent(x)
 		elif x.tag == 'string':	return String(x)
