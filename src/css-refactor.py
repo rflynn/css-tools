@@ -342,7 +342,6 @@ identical_decls = dict((d, sorted(s))
 for at in doc.atrules:
 	print at.format()
 
-cnt = 0
 for d, s in sorted(identical_decls.items(), \
 		key=lambda x:x[1], \
 		cmp=lambda x,y: css_strcmp(x[0].format(), y[0].format())):
@@ -351,8 +350,5 @@ for d, s in sorted(identical_decls.items(), \
 	#print s, d
 	r = Rule(Sels(s), d)
 	if r.decls.decl:
-		if cnt:
-			print '\n'
-		print r.format().rstrip()
-		cnt += 1
+		print r.format()
 
