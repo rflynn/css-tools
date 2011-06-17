@@ -3,6 +3,9 @@
 
 """
 CSS parser
+
+Copyright 2011 Ryan Flynn <parseerror@gmail.com>
+MIT licensed: http://www.opensource.org/licenses/mit-license.php
 """
 
 from simpleparse.parser import Parser
