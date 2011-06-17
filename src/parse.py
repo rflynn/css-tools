@@ -512,7 +512,7 @@ class Color:
 	}
 	KEYWORDS_REV = dict((v,k) for k,v in KEYWORDS.items())
 	def __init__(self, s):
-		name, rgb3, rgb6 = '', '', ''
+		name, rgb3, rgb6 = None, None, None
 		sl = s.lower()
 		if sl in Color.KEYWORDS:
 			name = sl
@@ -528,7 +528,7 @@ class Color:
 			if not name and rgb6 and rgb6 in Color.KEYWORDS_REV:
 				name = Color.KEYWORDS_REV[rgb6]
 		self.canonical = name if name else rgb6 if rgb6 else s
-		self.shortest = min([name, rgb3, s], key=len)
+		self.shortest = min(filter(None, [name, rgb3, s]), key=len)
 	def __repr__(self):
 		return 'Color(%s)' % self.canonical
 	def format(self):
