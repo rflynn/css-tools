@@ -554,7 +554,6 @@ class Filter:
 	def format(self): return self.s
 	def __cmp__(self, other): return cmp(str(self), str(other))
 
-# looks like simpleparse module is breaking occasionally, try to catch it...
 # Ref: http://code.activestate.com/recipes/65287-automatically-start-the-debugger-on-an-exception/
 def info(type, value, tb):
    if hasattr(sys, 'ps1') or not sys.stderr.isatty():
