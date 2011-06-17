@@ -17,7 +17,7 @@ from ast import AstNode
 # TODO: hsla(%,%,%,0.0)
 CSS_EBNF = r'''
 css      := toplevel*
-toplevel := rule/s
+toplevel := rule/at_rule/s
 rule     := sels?,block
 sels     := sel,(s?,',',s?,sel)*,s?
 sel      := sel_ops,(s,sel_ops)*
@@ -33,6 +33,8 @@ sel_adj  := '+',s?,tag
 tag      := ident/sel_univ
 sel_univ := sel_univ2
 sel_univ2:= '*'
+at_rule  := at_kword,s,values,';'
+at_kword := '@',ident
 block    := '{',s?,decls,s?,'}'
 decls    := decl?,(s?,';',s?,decl?)*,s?,';'?
 decl     := property,s?,':',s?,values
@@ -44,7 +46,8 @@ percent  := num,'%'
 dim      := num,ident
 hash     := '#',hex+
 uri      := url
-url      := ('url(',urlchars,')')
+url      := 'url(',urlstring?,')'
+urlstring:= string/sqstring/urlchars
 urlchars := [a-zA-Z0-9~`!@#$%^&*_+{}[|:,./?-]*
 # FIXME: can't get character class hex escape ranges to work...
 #urlchar  := [\x09\x21\x23-\x26\x27-\x7E] / nonascii / escape
@@ -145,17 +148,27 @@ class CSSDoc:
 	def __init__(self, ast):
 		self.ast = ast
 		self.top = [TopLevel(a.child[0]) for a in ast]
-		self.rules = [t.contents for t in self.top if isinstance(t.contents, Rule)]
+		self.atrules = []
+		self.rules = []
+		for t in self.top:
+			if isinstance(t.contents, Rule):
+				self.rules.append(t.contents)
+			elif isinstance(t.contents, AtRule):
+				self.atrules.append(t.contents)
 	def __repr__(self): return ','.join(map(str, self.top))
 	def format(self):
-		return ''.join(t.format() for t in self.top).rstrip()
+		nl = '' if Format.Minify else '\n'
+		return nl.join(t.format() for t in self.atrules) + nl + \
+			''.join(t.format() for t in self.rules).rstrip()
 	@staticmethod
 	def parse(text):
 		prod = 'css'
 		ok, child, nextchar = CSSDoc.Parser.parse(text, production=prod)
 		if not ok or nextchar != len(text):
 			raise Exception("""Wasn't able to parse "%s..." as a %s (%s chars parsed of %s), returned value was %s""" % (
-				repr(text)[max(0,nextchar-20):nextchar+100], prod, nextchar, len(text), (ok, child[-1] if child else child, nextchar)))
+				repr(text)[max(0,nextchar-20):nextchar+100], prod,
+				nextchar, len(text),
+				(ok, child[-1] if child else child, nextchar)))
 		ast = AstNode.make(child, text)
 		doc = CSSDoc(ast)
 		return doc
@@ -175,8 +188,27 @@ class TopLevel:
 				return Comment(ast)
 			else:
 				return Whitespace(ast)
+		else:
+			return AtRule.from_ast(ast)
 	def format(self):
 		return self.contents.format()
+
+class AtRule:
+	def __init__(self, ast, keyword, vals):
+		self.ast = ast
+		self.keyword = keyword
+		self.vals = vals
+	def __repr__(self): return 'AtRule(%s)' % (self.ast,)
+	def format(self):
+		return self.keyword.format() + ' ' + \
+			' '.join([v.format() for v in self.vals]) + ';'
+	@staticmethod
+	def from_ast(ast):
+		c = filter_space(ast.child)[0]
+		keyword = Ident.from_ast(c)
+		vals = map(Value.from_ast,
+			filter_space(ast.child[2].child))
+		return AtRule(ast, keyword, vals)
 
 class Rule:
 	def __init__(self, sels, decls):
@@ -376,11 +408,11 @@ class Value:
 	@staticmethod
 	def from_ast(ast):
 		v = ast.child[0]
-		if v.tag != 'any':
+		if v.tag not in ('any', 'at_kword'):
 			print 'ast:', ast
-			raise Exception('unsupported')
+			raise Exception('unsupported: ' + str(v.tag))
 		x = v.child[0]
-		if x.tag == 'ident':	return Ident.from_ast(x)
+		if x.tag == 'ident':	return Ident.from_ast(x.child[0])
 		elif x.tag == 'num':	return Number(x)
 		elif x.tag == 'percent':return Percent(x)
 		elif x.tag == 'string':	return String(x)
@@ -400,7 +432,7 @@ class Ident(object):
 	def format(self): return self.s
 	def __cmp__(self, other): return cmp(str(self), str(other))
 	@staticmethod
-	def from_ast(ast): return Ident(ast.child[0].str)
+	def from_ast(ast): return Ident(ast.str)
 
 class Number:
 	def __init__(self, ast):
@@ -424,7 +456,7 @@ class Dimension:
 		n = ast.child[0]
 		self.num = Number(n)
 		u = ast.child[1] if len(ast.child) > 1 else ''
-		self.unit = Ident.from_ast(u)
+		self.unit = Ident.from_ast(u.child[0])
 	def __repr__(self): return 'Dimension(%s,%s)' % (self.num, self.unit)
 	def format(self): return self.num.format() + self.unit.format()
 	def __cmp__(self, other): return cmp(str(self), str(other))
