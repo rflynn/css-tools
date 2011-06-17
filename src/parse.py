@@ -198,7 +198,7 @@ class AtRule:
 		self.ast = ast
 		self.keyword = keyword
 		self.vals = vals
-	def __repr__(self): return 'AtRule(%s)' % (self.ast,)
+	def __repr__(self): return 'AtRule(%s)' % str(self.ast)
 	def format(self):
 		return self.keyword.format() + ' ' + \
 			' '.join([v.format() for v in self.vals]) + ';'
@@ -239,7 +239,7 @@ class Comment:
 		c = ast.child[0]
 		self.text = c.child[0].str if c.child else ''
 	def __repr__(self):
-		return 'Comment(%s)' % (self.text,)
+		return 'Comment(%s)' % self.text
 	def format(self):
 		return '/*' + self.text + '*/' if not Format.Minify else ''
 
@@ -248,7 +248,7 @@ class Whitespace:
 		self.ast = ast
 	def __repr__(self):
 		s = self.ast.child[0].str
-		return 'Whitespace(%s)' % (repr(s),)
+		return 'Whitespace(%s)' % repr(s)
 	def format(self):
 		if Format.Minify:
 			return ''
@@ -323,7 +323,7 @@ class Sel_Op:
 		elif c.tag == 'sel_attr':	self.op = Sel_Op.ATTR
 		self.s = list(filter_space(c.child))[0].child[0].child[0].str
 	def __repr__(self):
-		return 'Sel_Op(%s)' % (self.format(),)
+		return 'Sel_Op(%s)' % self.format()
 	def format(self):
 		s = self.s
 		if self.op == Sel_Op.TAG:	s =        s
@@ -426,13 +426,12 @@ class Value:
 		elif x.tag == 'expr':	return Expression(x)
 		elif x.tag == 'uri':	return Uri(x)
 		elif x.tag == 'filter':	return Filter(x)
-		print 'Value.from_ast.x:', x
-		assert False
+		raise Exception('unexpected: Value.from_ast() x.tag: ' + x.tag)
 		return ast
 
 class Ident(object):
 	def __init__(self, s): self.s = s
-	def __repr__(self): return 'Ident(%s)' % (self.s,)
+	def __repr__(self): return 'Ident(%s)' % self.s
 	def format(self): return self.s
 	def __cmp__(self, other): return cmp(str(self), str(other))
 	@staticmethod
@@ -442,7 +441,7 @@ class Number:
 	def __init__(self, ast):
 		self.s = ast.child[0].str
 		self.f = float(self.s)
-	def __repr__(self): return 'Number(%s)' % (self.s,)
+	def __repr__(self): return 'Number(%s)' % self.s
 	def format(self): return self.s
 	def __cmp__(self, other): return cmp(str(self), str(other))
 
@@ -450,7 +449,7 @@ class Percent:
 	def __init__(self, ast):
 		self.s = ast.child[0].str
 		self.f = float(self.s)
-	def __repr__(self): return 'Percent(%s%%)' % (self.s,)
+	def __repr__(self): return 'Percent(%s%%)' % self.s
 	def format(self): return self.s + '%'
 	def __cmp__(self, other): return cmp(str(self), str(other))
 
@@ -473,7 +472,7 @@ class String:
 
 class Delim:
 	def __init__(self, s): self.s = s
-	def __repr__(self): return 'Delim(%s)' % (self.s,)
+	def __repr__(self): return 'Delim(%s)' % self.s
 	def format(self): return self.s
 	def leading_space(self):
 		return self.s in ('!',)
@@ -487,7 +486,7 @@ class Delim:
 class Hash:
 	def __init__(self, ast):
 		self.color = Color(ast.str)
-	def __repr__(self): return 'Hash(%s)' % (self.color,)
+	def __repr__(self): return 'Hash(%s)' % self.color
 	def format(self): return self.color.format()
 	def __cmp__(self, other): return cmp(str(self), str(other))
 
@@ -532,26 +531,26 @@ class Color:
 		self.canonical = name if name else rgb6 if rgb6 else s
 		self.shortest = name if (name and len(name) < 4) else rgb3 if rgb3 else name if name else s
 	def __repr__(self):
-		return 'Color(%s)' % (self.canonical,)
+		return 'Color(%s)' % self.canonical
 	def format(self):
 		return self.shortest if Format.Minify else self.canonical
 	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class Expression:
 	def __init__(self, ast): self.s = ast.str
-	def __repr__(self): return 'Expression(%s)' % (self.s,)
+	def __repr__(self): return 'Expression(%s)' % self.s
 	def format(self): return self.s
 	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class Uri:
 	def __init__(self, ast): self.s = ast.str
-	def __repr__(self): return 'Uri(%s)' % (self.s,)
+	def __repr__(self): return 'Uri(%s)' % self.s
 	def format(self): return self.s
 	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class Filter:
 	def __init__(self, ast): self.s = ast.str
-	def __repr__(self): return 'Filter(%s)' % (self.s,)
+	def __repr__(self): return 'Filter(%s)' % self.s
 	def format(self): return self.s
 	def __cmp__(self, other): return cmp(str(self), str(other))
 
