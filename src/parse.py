@@ -246,14 +246,13 @@ class Comment:
 class Whitespace:
 	def __init__(self, ast):
 		self.ast = ast
+		self.s = self.ast.child[0].str
 	def __repr__(self):
-		s = self.ast.child[0].str
-		return 'Whitespace(%s)' % repr(s)
+		return 'Whitespace(%s)' % repr(self.s)
 	def format(self):
 		if Format.Minify:
 			return ''
-		s = self.ast.child[0].str
-		if not Format.Unmodified and s.count('\n') > 1:
+		if not Format.Unmodified and self.s.count('\n') > 1:
 			return '\n'
 		return s
 
