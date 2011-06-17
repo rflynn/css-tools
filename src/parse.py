@@ -165,10 +165,10 @@ class CSSDoc:
 		prod = 'css'
 		ok, child, nextchar = CSSDoc.Parser.parse(text, production=prod)
 		if not ok or nextchar != len(text):
-			raise Exception("""Wasn't able to parse "%s..." as a %s (%s chars parsed of %s), returned value was %s""" % (
-				repr(text)[max(0,nextchar-20):nextchar+100], prod,
-				nextchar, len(text),
-				(ok, child[-1] if child else child, nextchar)))
+			lineno = text[:nextchar].count('\n')
+			line = text[:nextchar+256].split('\n')[lineno]
+			raise Exception("""Line %u: %s\n\tparse error: "%s..." """ % (
+				lineno, line, repr(text[nextchar:nextchar+256])))
 		ast = AstNode.make(child, text)
 		doc = CSSDoc(ast)
 		return doc
