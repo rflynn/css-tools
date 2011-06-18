@@ -263,6 +263,8 @@ class Sels:
 		self.sel = sel
 	def __repr__(self):
 		return 'Sels(' + ','.join(map(str,self.sel)) + ')'
+	def __len__(self):
+		return sum(map(len, self.sel))
 	def format(self):
 		j = ',' + (' ' if not Format.Minify else '')
 		return j.join(s.format() for s in self.sel)
@@ -284,6 +286,8 @@ class Sel:
 		return 'Sel(' + ','.join(map(str,self.sel)) + ')'
 	def format(self):
 		return ' '.join([''.join([s.format() for s in sel]) for sel in self.sel])
+	def __len__(self):
+		return len(self.format())
 	def is_simple(self):
 		"""is this selector free of complex operators?"""
 		return False
@@ -374,7 +378,8 @@ class Decl:
 	def __repr__(self):
 		return 'Decl(%s:%s)' % (self.property, self.values)
 	def __len__(self):
-		return len(self.property.format()) + len(self.values.format())
+		return len(self.property.format()) + \
+			sum(len(v.format())+2 for v in self.values) - 1
 	def format(self):
 		# decl values need spaces between them even in Minify, with a few exceptions
 		valstr = self.values[0].format()

@@ -40,38 +40,61 @@ doc = cssparse.CSSDoc.parse(contents)
 ref = cssrefactor.CSSRefactor(doc)
 
 import itertools
+from collections import defaultdict
 
-# list of all overlapping decls subsets
-overlap = (set(x.decls.decl) & set(y.decls.decl)
-		for x,y in itertools.combinations(ref.rules, 2))
-overlap2 = filter(None, overlap)
-print overlap2
-od = dict.fromkeys(map(tuple, overlap2), {})
+Extracted_Overlapping_Rules = []
 
-# for each unique overlapping subset, build a set of all
-# decls that share it
-for r in ref.rules:
-	rs = set(r.decls.decl)
-	for k, v in od.items():
-		ks = set(k)
-		if len(ks & rs) == len(ks):
-			v[r] = 1
-print od
+def extract_overlapping_decl_subsets(ref):
 
-# calculate the sum total length of the selectors of the overlapping decls
+	# list of all overlapping decls subsets
+	overlap = (set(x.decls.decl) & set(y.decls.decl)
+			for x,y in itertools.combinations(ref.rules, 2))
+	overlap2 = filter(None, overlap)
 
-# sort the overlapping subsets by total size, i.e.
-# figure out which ones will save the most space if condensed
+	overlap_decls = dict.fromkeys(map(tuple, overlap2), {})
 
-# if we have 1 or more overlapping subsets, and the best one will save us
-# space, use it. pull the subsets out of each decl and build a new rule from
-# their selectors. save this for later.
+	# for each unique overlapping subset, build a set of all
+	# decls that share it
+	tmp = defaultdict(dict)
+	for r in ref.rules:
+		rs = set(r.decls.decl)
+		for k, v in overlap_decls.items():
+			ks = set(k)
+			if (ks & rs) == ks:
+				tmp[k][r] = 1
+	overlap_decls = dict(tmp)
+	if not overlap_decls:
+		return None
 
-# the removal of these subsets of 2+ selectors could potentially effect
-# every other overlapping subset, so do everything over again until we run out
-# of subset operations that save space.
+	# calculate difference between sum total lengths of decls - selectors
+	for shared, rules in overlap_decls.items():
+		sharedlen = sum(map(len, shared)) * len(rules)
+		sellen = sum([len(r.sels) for r in rules.keys()])
+		overlap_decls[shared] = (sharedlen - sellen, rules)
 
-# now merge the remaining doc rules with the factored-out ones into a coherent document
+	# sort the overlapping subsets by the difference between the length of the decls
+	# and the selectors; this is the space that we can save by applying it
+	best = max(overlap_decls.items(), key=lambda x:x[1][0])
+	bestdecls, (bestscore, bestrules) = best
+	if bestscore < 1 or not bestrules:
+		# no more space-saving overlaps
+		return None
 
-#print ref.format()
+	# build a new rule for bestrules/bestdecls
+	extracted = Rule(Sels([r.sels for r in bestrules]),
+			Decls(bestdecls))
+
+	# remove shared subsets from the originals
+	for r in bestrules:
+		for d in bestdecls:
+			r.decls.decl.remove(d)
+
+	ref.rules.insert(0, extracted)
+
+	return extracted
+
+while extract_overlapping_decl_subsets(ref):
+	pass
+
+print ref.format()
 
