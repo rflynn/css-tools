@@ -20,6 +20,7 @@ css      := toplevel*
 toplevel := rule/at_rule/s
 rule     := sels?,block
 sels     := sel,(s?,',',s?,sel)*,s?
+# FIXME: allows "> b{}"
 sel      := sel_ops,(s,sel_ops)*
 sel_ops  := sel_op+
 sel_op   := sel_tag/sel_class/sel_id/sel_psuedo/sel_child/sel_adj/sel_attr
@@ -133,12 +134,16 @@ class Format:
 	@staticmethod
 	def pop():
 		# NOTE: intentionally raise exception if none were pushed
-		last = Format.Stack.pop(0)
-		if last == 'canonical':
-			Format.canonical()
-		elif last == 'minify':
-			Format.minify()
-		return last
+		Format.Stack.pop()
+		if not Format.Stack:
+			return None
+		else:
+			last = Format.Stack[-1]
+			if last == 'canonical':
+				Format.canonical()
+			elif last == 'minify':
+				Format.minify()
+			return last
 
 # strip whitespace and comments
 def filter_space(l): return filter(lambda c: c.tag not in ('s','comment'), l)
@@ -282,12 +287,16 @@ class Sel:
 		#print 'Sel ast:', ast
 		self.sel = sel#map(Sel.from_ast, filter_space(ast.child))
 		#print 'Sel.sel:', self.sel
+		Format.minify()
+		f = self.format()
+		Format.pop()
+		self._len = len(f)
 	def __repr__(self):
 		return 'Sel(' + ','.join(map(str,self.sel)) + ')'
 	def format(self):
 		return ' '.join([''.join([s.format() for s in sel]) for sel in self.sel])
 	def __len__(self):
-		return len(self.format())
+		return self._len
 	def is_simple(self):
 		"""is this selector free of complex operators?"""
 		return False
@@ -330,18 +339,19 @@ class Sel_Op:
 		return 'Sel_Op(%s)' % (self.format(),)
 	def format(self):
 		s = self.s
+		sp = '' if Format.Minify else ' '
 		if self.op == Sel_Op.TAG:	s =        s
 		elif self.op == Sel_Op.CLASS:	s = '.'  + s
 		elif self.op == Sel_Op.ID:	s = '#'  + s
 		elif self.op == Sel_Op.PSUEDO:	s = ':'  + s
-		elif self.op == Sel_Op.CHILD:	s = '> ' + s
-		elif self.op == Sel_Op.ADJ:	s = '+ ' + s
+		elif self.op == Sel_Op.CHILD:	s = '>' + sp + s
+		elif self.op == Sel_Op.ADJ:	s = sp + '+' + sp + s
 		elif self.op == Sel_Op.ATTR:	s = '['  + s + ']'
 		return s
 
 class Decls:
 	def __init__(self, decl):
-		self.decl = decl
+		self.decl = list(decl)
 	def __repr__(self):
 		return 'Decls(' + ','.join(map(str,self.decl)) + ')'
 	def format(self):
@@ -375,8 +385,11 @@ class Decl:
 		self.property = property_
 		self.propertylow = self.property.lower()
 		self.values = values
+		self._str = None
 	def __repr__(self):
-		return 'Decl(%s:%s)' % (self.property, self.values)
+		if not self._str:
+			self._str = 'Decl(%s:%s)' % (self.property, self.values)
+		return self._str
 	def __len__(self):
 		return len(self.property.format()) + \
 			sum(len(v.format())+2 for v in self.values) - 1

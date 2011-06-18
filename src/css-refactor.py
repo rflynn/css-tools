@@ -12,7 +12,7 @@ then, merge any 2+ sub-properties into their common parent
 """
 
 import sys
-from itertools import chain
+from itertools import combinations
 from collections import defaultdict
 from optparse import OptionParser
 
@@ -39,62 +39,87 @@ cssparse.Format.canonical()
 doc = cssparse.CSSDoc.parse(contents)
 ref = cssrefactor.CSSRefactor(doc)
 
-import itertools
-from collections import defaultdict
-
 Extracted_Overlapping_Rules = []
 
 def extract_overlapping_decl_subsets(ref):
 
 	# list of all overlapping decls subsets
-	overlap = (set(x.decls.decl) & set(y.decls.decl)
-			for x,y in itertools.combinations(ref.rules, 2))
-	overlap2 = filter(None, overlap)
+	# NOTE: expensive
+	overlap = filter(None,
+			(set(x.decls.decl) & set(y.decls.decl)
+				for x,y in combinations(ref.rules, 2)))
+	if not overlap:
+		return None
 
-	overlap_decls = dict.fromkeys(map(tuple, overlap2), {})
+	overlap_decls_sets = [(tuple(o), set(o)) for o in overlap]
 
 	# for each unique overlapping subset, build a set of all
 	# decls that share it
-	tmp = defaultdict(dict)
+	tmp = {}
 	for r in ref.rules:
 		rs = set(r.decls.decl)
-		for k, v in overlap_decls.items():
-			ks = set(k)
+		for k, ks in overlap_decls_sets:
 			if (ks & rs) == ks:
-				tmp[k][r] = 1
-	overlap_decls = dict(tmp)
-	if not overlap_decls:
-		return None
+				try:
+					tmp[k][r] = 1
+				except KeyError:
+					tmp[k] = {r:1}
+	overlap_decls_total = tmp
 
 	# calculate difference between sum total lengths of decls - selectors
-	for shared, rules in overlap_decls.items():
+	for shared, rules in overlap_decls_total.items():
 		sharedlen = sum(map(len, shared)) * len(rules)
 		sellen = sum([len(r.sels) for r in rules.keys()])
-		overlap_decls[shared] = (sharedlen - sellen, rules)
+		overlap_decls_total[shared] = (sharedlen - sellen, rules)
 
 	# sort the overlapping subsets by the difference between the length of the decls
 	# and the selectors; this is the space that we can save by applying it
-	best = max(overlap_decls.items(), key=lambda x:x[1][0])
-	bestdecls, (bestscore, bestrules) = best
+	worth_it = list(filter(lambda x:x[1][0] > 0,
+				overlap_decls_total.items()))
+	if not worth_it:
+		return None
+
+	best = sorted(worth_it, key=lambda x:x[1][0], reverse=True)
+
+	bestdecls, (bestscore, bestrules) = best[0]
 	if bestscore < 1 or not bestrules:
 		# no more space-saving overlaps
 		return None
 
-	# build a new rule for bestrules/bestdecls
-	extracted = Rule(Sels([r.sels for r in bestrules]),
-			Decls(bestdecls))
+	# apply as many space-saving overlap extractions as possible
+	affected = {}
+	for bestdecls, (bestscore, bestrules) in best:
 
-	# remove shared subsets from the originals
-	for r in bestrules:
-		for d in bestdecls:
-			r.decls.decl.remove(d)
+		# if we hit an entry that refers to a selector that
+		# appeared in a previous entry we need to stop, because
+		# it affects the results
+		for r in bestrules:
+			for sel in r.sels.sel:
+				if sel in affected:
+					return True
+				affected[sel] = 1
 
-	ref.rules.insert(0, extracted)
+		# build a new rule for bestrules/bestdecls
+		extracted = Rule(Sels([r.sels for r in bestrules]),
+				Decls(bestdecls))
 
-	return extracted
+		# remove shared subsets from the originals
+		for r in bestrules:
+			for d in bestdecls:
+				try:
+					r.decls.decl.remove(d)
+				except ValueError:
+					pass
+	
+		ref.rules.insert(0, extracted)
 
+	return True
+
+cnt = 0
 while extract_overlapping_decl_subsets(ref):
-	pass
+	cnt += 1
+
+print >> sys.stderr, 'cnt:', cnt
 
 print ref.format()
 
