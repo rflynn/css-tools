@@ -373,6 +373,8 @@ class Decl:
 		self.values = values
 	def __repr__(self):
 		return 'Decl(%s:%s)' % (self.property, self.values)
+	def __len__(self):
+		return len(self.property.format()) + len(self.values.format())
 	def format(self):
 		# decl values need spaces between them even in Minify, with a few exceptions
 		valstr = self.values[0].format()
