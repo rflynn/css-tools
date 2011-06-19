@@ -27,7 +27,9 @@ doc = cssparse.CSSDoc.parse(contents)
 if Opts.parse_tree:
 	print doc
 else:
-	if Opts.canonical: cssparse.Format.canonical()
-	elif Opts.minify: cssparse.Format.minify()
+	if Opts.minify:
+		cssparse.Format.minify()
+	else:
+		cssparse.Format.canonical()
 	print doc.format()
 
