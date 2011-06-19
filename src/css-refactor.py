@@ -39,16 +39,10 @@ cssparse.Format.canonical()
 doc = cssparse.CSSDoc.parse(contents)
 ref = cssrefactor.CSSRefactor(doc)
 if Opts.aggressive:
-	if Opts.verbose:
-		print >> sys.stderr, 'aggressively optimizing...',
-	max_cnt = 100
-	cnt = 1
-	while cnt < max_cnt:
-		if Opts.verbose:
-			print >> sys.stderr, '.',
-		if not ref.extract_overlapping_decl_subsets():
-			break
-		cnt += 1
+	print >> sys.stderr, 'aggressively optimizing...',
+	for _ in ref.aggressive(yield_step=True, step_max=100):
+		sys.stderr.write('.')
+	sys.stderr.write('\n')
 
 print ref.format()
 

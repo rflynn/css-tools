@@ -217,30 +217,40 @@ class CSSRefactor:
 				s += r.format()
 		return s.rstrip()
 
+	def aggressive(self, yield_step=False, step_max=100):
+		step = 1
+		while step <= step_max and self.extract_overlapping_decl_subsets():
+			if yield_step:
+				yield step
+			step += 1
+
 	def extract_overlapping_decl_subsets(self):
 		"""
 		aggressive optimization (expensive, i.e. slow)
 		for all declaration subsets shared by two or more selectors:
 			break them out into a separate rule if it will save space when minimized
 		"""
+
+		rules = [r for r in self.rules
+				if max(map(len, r.decls.decl) + [0]) > min(map(len, r.sels.sel) + [0])]
+
+		rule_sets = [set(r.decls.decl) for r in rules]
+
+		overlap = set([tuple(o) for o in
+				(x & y for x,y in combinations(rule_sets, 2)) if o])
 	
-		# list of all overlapping decls subsets
-		# NOTE: expensive
-		overlap = filter(None,
-				(set(x.decls.decl) & set(y.decls.decl)
-					for x,y in combinations(self.rules, 2)))
 		if not overlap:
 			return None
 
-		overlap_decls_sets = [(tuple(o), set(o)) for o in overlap]
+		overlap_decls_sets = [(set(o), o) for o in overlap]
 
 		# for each unique overlapping subset, build a set of all
 		# decls that share it
+		# O(n^2)... slow!
 		tmp = {}
-		for r in self.rules:
-			rs = set(r.decls.decl)
-			for k, ks in overlap_decls_sets:
-				if (ks & rs) == ks:
+		for r, rs in zip(rules, rule_sets):
+			for ks, k in overlap_decls_sets:
+				if ((ks & rs) == ks):
 					try:
 						tmp[k][r] = 1
 					except KeyError:
