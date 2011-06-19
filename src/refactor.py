@@ -231,24 +231,29 @@ class CSSRefactor:
 			break them out into a separate rule if it will save space when minimized
 		"""
 
-		rules = [r for r in self.rules
-				if max(map(len, r.decls.decl) + [0]) > min(map(len, r.sels.sel) + [0])]
-
-		rule_sets = [set(r.decls.decl) for r in rules]
-
+		rules = [(set(r.decls.decl), r) for r in self.rules]
 		overlap = set([tuple(o) for o in
-				(x & y for x,y in combinations(rule_sets, 2)) if o])
-	
+				(xs & ys for (xs,_),(ys,_) in combinations(rules, 2)) if o])
 		if not overlap:
 			return None
 
-		overlap_decls_sets = [(set(o), o) for o in overlap]
+		"""
+		# try to reduce number of least effective overlaps considered in each round
+		# this hueristic reduces effectiveness ~10% but halves execution time
+		maxoverlap = len(max(overlap, key=len))
+		print >> sys.stderr, 'maxoverlap:', maxoverlap
+		if maxoverlap > 2:
+			overlap = [o for o in overlap if len(o) >= 2]
+		print >> sys.stderr, 'rules(%u) * overlap(%u): %u' % (
+			len(rules), len(overlap),
+			len(rules) * len(overlap))
+		"""
 
-		# for each unique overlapping subset, build a set of all
-		# decls that share it
+		# for each overlapping subset, set of all decls that contain it
 		# O(n^2)... slow!
+		overlap_decls_sets = [(set(o), o) for o in overlap]
 		tmp = {}
-		for r, rs in zip(rules, rule_sets):
+		for rs, r in rules:
 			for ks, k in overlap_decls_sets:
 				if ((ks & rs) == ks):
 					try:
@@ -278,7 +283,7 @@ class CSSRefactor:
 			return None
 
 		# apply as many space-saving overlap extractions as possible
-		affected = {}
+		affected = set()
 		for bestdecls, (bestscore, bestrules) in best:
 
 			# if we hit an entry that refers to a selector that
@@ -288,7 +293,7 @@ class CSSRefactor:
 				for sel in r.sels.sel:
 					if sel in affected:
 						return True
-					affected[sel] = 1
+					affected.add(sel)
 
 			# build a new rule for bestrules/bestdecls
 			extracted = Rule(Sels([r.sels for r in bestrules]),
