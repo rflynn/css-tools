@@ -163,8 +163,8 @@ class CSSDoc:
 	def __repr__(self): return ','.join(map(str, self.top))
 	def format(self):
 		nl = '' if Format.Minify else '\n'
-		return nl.join(t.format() for t in self.atrules) + nl + \
-			''.join(t.format() for t in self.rules).rstrip()
+		return (nl.join(t.format() for t in self.atrules) + nl + \
+			''.join(t.format() for t in self.rules)).strip()
 	@staticmethod
 	def parse(text):
 		prod = 'css'
