@@ -177,10 +177,6 @@ class CSSDoc:
 	def __repr__(self): return ','.join(map(str, self.top))
 	def format(self):
 		nl = '' if Format.Minify else '\n'
-		"""
-		return (nl.join(t.format() for t in self.atrules) + nl + \
-			''.join(t.format() for t in self.rules)).strip()
-		"""
 		s = ''
 		for t in self.top:
 			if isinstance(t.contents, Comment) and Format.Minify and \
@@ -270,8 +266,7 @@ class Rule:
 class Comment:
 	def __init__(self, ast):
 		self.ast = ast
-		c = ast.child[0]
-		self.text = c.child[0].str if c.child else ''
+		self.text = ast.child[0].str
 	def __repr__(self):
 		return 'Comment(%s)' % self.text
 	def format(self, preserve=False):
@@ -430,7 +425,8 @@ class Decls:
 		return Decls(self.decl + other.decl)
 
 class Decl:
-	def __init__(self, property_, values):
+	def __init__(self, property_, values, ast=None):
+		self.ast = ast
 		#print 'Decl ast:', ast
 		self.property = property_
 		self.propertylow = self.property.lower()
@@ -467,17 +463,17 @@ class Decl:
 	@staticmethod
 	def from_ast(ast):
 		"""generate a Decl from an AstNode"""
-		print 'Decl ast:', ast
+		#print 'Decl ast:', ast
 		nospace = list(filter_space(ast.child))
 		prop,vals = nospace
-		d = Decl(prop.str, [])
+		d = Decl(prop.str, [], ast)
 		d.values = map(Value.from_ast, filter_space(vals.child))
 		return d
 
 class Value:
 	@staticmethod
 	def from_ast(ast):
-		print 'Value ast:', ast
+		#print 'Value ast:', ast
 		v = ast.child[0]
 		if v.tag not in ('any', 'at_kword', 'block'):
 			print 'ast:', ast
