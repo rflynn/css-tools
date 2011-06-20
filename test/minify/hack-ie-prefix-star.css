@@ -5,8 +5,8 @@
 /* before */
 #element {
     width: 1px;
-    *width: 2px;
-    _width: 3px;
+    *width: 2pt;
+    _width: 3em;
 }
 /* after */
-#element{width:1px;*width:3pt;_width:2em}
+#element{width:1px;*width:2pt;_width:3em}

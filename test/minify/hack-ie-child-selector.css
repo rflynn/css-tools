@@ -8,4 +8,4 @@ html >/**/ body p {
     color: blue;
 }
 /* after */
-html>/**/body p{color:blue}
+html>/**/body p{color:#00f}

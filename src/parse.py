@@ -60,7 +60,7 @@ filterkv := name, '=', sqstring
 sqstring := "'", sqchars, "'"
 sqchars  := -"'"*
 string   := '"',chars,'"'
-chars    := -'"'*
+chars    := ('\\"'/-'"')*
 inc      := '=~'
 bareq    := '|='
 ident    := ident2
@@ -84,9 +84,10 @@ exprstr  := "'", -"'"*, "'"
 exprbinop:= '+' / '-' / '*' / '/' / '||' / '&&'
 exprsinop:= '+' / '-'
 exprparen:= '(', space?, exprexpr, space?, ')'
-name     := [a-zA-Z_-],[a-zA-Z0-9_-]*
+# NOTE: IE prefix hack
+name     := [*a-zA-Z_-],[a-zA-Z0-9_-]*
 hex      := [0-9a-fA-F]
-s        := space/comment
+s        := (space/comment)+
 space    := [ \t\r\n\v\f]+
 comment  := '/*', commtext, '*/'
 commtext := -"*/"*
@@ -254,10 +255,12 @@ class Whitespace:
 	def __repr__(self):
 		s = self.ast.child[0].str
 		return 'Whitespace(%s)' % (repr(s),)
-	def format(self):
+	def format(self, forceshow=False):
+		s = self.ast.child[0].str
+		if forceshow:
+			return s
 		if Format.Minify:
 			return ''
-		s = self.ast.child[0].str
 		if not Format.Unmodified and s.count('\n') > 1:
 			return '\n'
 		return s
@@ -294,7 +297,15 @@ class Sel:
 	def __repr__(self):
 		return 'Sel(' + ','.join(map(str,self.sel)) + ')'
 	def format(self):
-		return ' '.join([''.join([s.format() for s in sel]) for sel in self.sel])
+		s = ''.join(s.format() for s in self.sel[0])
+		for sel in self.sel[1:]:
+			s2 = ''.join(s.format() for s in sel)
+			if sel[0].op in (Sel_Op.TAG, Sel_Op.CLASS, Sel_Op.ID):
+				# spaces only matter for these operators; the
+				# rest can be omitted with no difference
+				s += ' '
+			s += s2
+		return s
 	def __len__(self):
 		return self._len
 	def is_simple(self):
@@ -334,7 +345,9 @@ class Sel_Op:
 		elif c.tag == 'sel_child':	self.op = Sel_Op.CHILD
 		elif c.tag == 'sel_adj':	self.op = Sel_Op.ADJ
 		elif c.tag == 'sel_attr':	self.op = Sel_Op.ATTR
+		#print 'Sel_Op c.tag:', c.tag, 'c.child:', c.child
 		self.s = list(filter_space(c.child))[0].child[0].child[0].str
+		#print 'Sel_Op self.s:', self.s
 	def __repr__(self):
 		return 'Sel_Op(%s)' % (self.format(),)
 	def format(self):
@@ -344,8 +357,18 @@ class Sel_Op:
 		elif self.op == Sel_Op.CLASS:	s = '.'  + s
 		elif self.op == Sel_Op.ID:	s = '#'  + s
 		elif self.op == Sel_Op.PSUEDO:	s = ':'  + s
-		elif self.op == Sel_Op.CHILD:	s = '>' + sp + s
-		elif self.op == Sel_Op.ADJ:	s = sp + '+' + sp + s
+		elif self.op == Sel_Op.CHILD:
+			s = '>'
+			try:
+				c = self.ast.child[0].child[0].child[0]
+				if c.tag == 'comment' and c.str == '/**/':
+					# child selector hack, preserve comment
+					# see test/minify/hack-ie-child-selector.css
+					s += '/**/'
+			except:
+				pass
+			s += sp + self.s
+		elif self.op == Sel_Op.ADJ:	s = '+' + sp + s
 		elif self.op == Sel_Op.ATTR:	s = '['  + s + ']'
 		return s
 
@@ -488,7 +511,7 @@ class Dimension:
 class String:
 	def __init__(self, ast): self.s = ast.child[0].str
 	def __repr__(self): return self.s
-	def format(self): return self.s
+	def format(self): return '"' + self.s + '"'
 	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class Delim:
