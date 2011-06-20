@@ -1,0 +1,12 @@
+/*
+ * Using _ and * to prefix CSS properties is a simple way to target IE6 and IE7.
+ * Ref: http://developer.yahoo.com/yui/compressor/css.html#hacks
+ */
+/* before */
+#element {
+    width: 1px;
+    *width: 2pt;
+    _width: 3em;
+}
+/* after */
+#element{width:1px;*width:2pt;_width:3em}

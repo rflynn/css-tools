@@ -23,6 +23,7 @@ css      := toplevel*
 toplevel := rule/at_rule/s
 rule     := sels?,block
 sels     := sel,(s?,',',s?,sel)*,s?
+# FIXME: allows "> b{}"
 sel      := sel_ops,(s,sel_ops)*
 sel_ops  := sel_op+
 sel_op   := sel_tag/sel_class/sel_id/sel_psuedo/sel_child/sel_adj/sel_attr
@@ -62,7 +63,7 @@ filterkv := name, '=', sqstring
 sqstring := "'", sqchars, "'"
 sqchars  := -"'"*
 string   := '"',chars,'"'
-chars    := -'"'*
+chars    := ('\\"'/-'"')*
 inc      := '=~'
 bareq    := '|='
 ident    := ident2
@@ -86,9 +87,10 @@ exprstr  := "'", -"'"*, "'"
 exprbinop:= '+' / '-' / '*' / '/' / '||' / '&&'
 exprsinop:= '+' / '-'
 exprparen:= '(', space?, exprexpr, space?, ')'
-name     := [a-zA-Z_-],[a-zA-Z0-9_-]*
+# NOTE: IE prefix hack
+name     := [*a-zA-Z_-],[a-zA-Z0-9_-]*
 hex      := [0-9a-fA-F]
-s        := space/comment
+s        := (space/comment)+
 space    := [ \t\r\n\v\f]+
 comment  := '/*', commtext, '*/'
 commtext := -"*/"*
@@ -136,12 +138,16 @@ class Format:
 	@staticmethod
 	def pop():
 		# NOTE: intentionally raise exception if none were pushed
-		last = Format.Stack.pop(0)
-		if last == 'canonical':
-			Format.canonical()
-		elif last == 'minify':
-			Format.minify()
-		return last
+		Format.Stack.pop()
+		if not Format.Stack:
+			return None
+		else:
+			last = Format.Stack[-1]
+			if last == 'canonical':
+				Format.canonical()
+			elif last == 'minify':
+				Format.minify()
+			return last
 
 # strip whitespace and comments
 def filter_space(l): return filter(lambda c: c.tag not in ('s','comment'), l)
@@ -161,8 +167,8 @@ class CSSDoc:
 	def __repr__(self): return ','.join(map(str, self.top))
 	def format(self):
 		nl = '' if Format.Minify else '\n'
-		return nl.join(t.format() for t in self.atrules) + nl + \
-			''.join(t.format() for t in self.rules).rstrip()
+		return (nl.join(t.format() for t in self.atrules) + nl + \
+			''.join(t.format() for t in self.rules)).strip()
 	@staticmethod
 	def parse(text):
 		prod = 'css'
@@ -252,12 +258,14 @@ class Whitespace:
 		self.s = self.ast.child[0].str
 	def __repr__(self):
 		return 'Whitespace(%s)' % repr(self.s)
-	def format(self):
+	def format(self, forceshow=False):
+		if forceshow:
+			return self.s
 		if Format.Minify:
 			return ''
 		if not Format.Unmodified and self.s.count('\n') > 1:
 			return '\n'
-		return s
+		return self.s
 
 class Sels:
 	def __init__(self, sel):
@@ -265,6 +273,8 @@ class Sels:
 		self.sel = sel
 	def __repr__(self):
 		return 'Sels(' + ','.join(map(str,self.sel)) + ')'
+	def __len__(self):
+		return sum(map(len, self.sel))
 	def format(self):
 		j = ',' + (' ' if not Format.Minify else '')
 		return j.join(s.format() for s in self.sel)
@@ -282,10 +292,24 @@ class Sel:
 		#print 'Sel ast:', ast
 		self.sel = sel#map(Sel.from_ast, filter_space(ast.child))
 		#print 'Sel.sel:', self.sel
+		Format.minify()
+		f = self.format()
+		Format.pop()
+		self._len = len(f)
 	def __repr__(self):
 		return 'Sel(' + ','.join(map(str,self.sel)) + ')'
 	def format(self):
-		return ' '.join([''.join([s.format() for s in sel]) for sel in self.sel])
+		s = ''.join(s.format() for s in self.sel[0])
+		for sel in self.sel[1:]:
+			s2 = ''.join(s.format() for s in sel)
+			if sel[0].op in (Sel_Op.TAG, Sel_Op.CLASS, Sel_Op.ID):
+				# spaces only matter for these operators; the
+				# rest can be omitted with no difference
+				s += ' '
+			s += s2
+		return s
+	def __len__(self):
+		return self._len
 	def is_simple(self):
 		"""is this selector free of complex operators?"""
 		return False
@@ -323,23 +347,36 @@ class Sel_Op:
 		elif c.tag == 'sel_child':	self.op = Sel_Op.CHILD
 		elif c.tag == 'sel_adj':	self.op = Sel_Op.ADJ
 		elif c.tag == 'sel_attr':	self.op = Sel_Op.ATTR
+		#print 'Sel_Op c.tag:', c.tag, 'c.child:', c.child
 		self.s = list(filter_space(c.child))[0].child[0].child[0].str
+		#print 'Sel_Op self.s:', self.s
 	def __repr__(self):
 		return 'Sel_Op(%s)' % self.format()
 	def format(self):
 		s = self.s
+		sp = '' if Format.Minify else ' '
 		if self.op == Sel_Op.TAG:	s =        s
 		elif self.op == Sel_Op.CLASS:	s = '.'  + s
 		elif self.op == Sel_Op.ID:	s = '#'  + s
 		elif self.op == Sel_Op.PSUEDO:	s = ':'  + s
-		elif self.op == Sel_Op.CHILD:	s = '> ' + s
-		elif self.op == Sel_Op.ADJ:	s = '+ ' + s
+		elif self.op == Sel_Op.CHILD:
+			s = '>'
+			try:
+				c = self.ast.child[0].child[0].child[0]
+				if c.tag == 'comment' and c.str == '/**/':
+					# child selector hack, preserve comment
+					# see test/minify/hack-ie-child-selector.css
+					s += '/**/'
+			except:
+				pass
+			s += sp + self.s
+		elif self.op == Sel_Op.ADJ:	s = '+' + sp + s
 		elif self.op == Sel_Op.ATTR:	s = '['  + s + ']'
 		return s
 
 class Decls:
 	def __init__(self, decl):
-		self.decl = decl
+		self.decl = list(decl)
 	def __repr__(self):
 		return 'Decls(' + ','.join(map(str,self.decl)) + ')'
 	def format(self):
@@ -373,8 +410,14 @@ class Decl:
 		self.property = property_
 		self.propertylow = self.property.lower()
 		self.values = values
+		self._str = None
 	def __repr__(self):
-		return 'Decl(%s:%s)' % (self.property, self.values)
+		if not self._str:
+			self._str = 'Decl(%s:%s)' % (self.property, self.values)
+		return self._str
+	def __len__(self):
+		return len(self.property.format()) + \
+			sum(len(v.format())+2 for v in self.values) - 1
 	def format(self):
 		# decl values need spaces between them even in Minify, with a few exceptions
 		valstr = self.values[0].format()
@@ -468,11 +511,17 @@ class Dimension:
 	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class String:
+<<<<<<< HEAD
 	def __init__(self, ast, q):
 		self.q = q
 		self.s = ast.child[0].str
 	def __repr__(self): return self.q + self.s + self.q
 	def format(self): return self.q + self.s + self.q
+=======
+	def __init__(self, ast): self.s = ast.child[0].str
+	def __repr__(self): return self.s
+	def format(self): return '"' + self.s + '"'
+>>>>>>> d0ec79771bf4699204f7e6f94aa54433735eaf23
 	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class Delim:

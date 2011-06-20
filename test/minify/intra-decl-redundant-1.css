@@ -1,9 +1,0 @@
-/* before */
-h1 {
-	font-size:10px;
-	font-size:11px;
-}
-/* after */
-h1 {
-	font-size:11px;
-}
