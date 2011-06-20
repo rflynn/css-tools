@@ -511,17 +511,11 @@ class Dimension:
 	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class String:
-<<<<<<< HEAD
 	def __init__(self, ast, q):
 		self.q = q
 		self.s = ast.child[0].str
 	def __repr__(self): return self.q + self.s + self.q
 	def format(self): return self.q + self.s + self.q
-=======
-	def __init__(self, ast): self.s = ast.child[0].str
-	def __repr__(self): return self.s
-	def format(self): return '"' + self.s + '"'
->>>>>>> d0ec79771bf4699204f7e6f94aa54433735eaf23
 	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class Delim:
