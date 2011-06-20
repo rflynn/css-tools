@@ -6,48 +6,12 @@
 # TODO:
 # 	* retain comment-using hacks as mentioned in http://developer.yahoo.com/yui/compressor/css.html#hacks
 
-import os
 
-class FormatTest:
+from test import CSSUnitTests
+
+class FormatUnitTests(CSSUnitTests):
 	def __init__(self):
-		self.tests = []
-		for root, dirs, files in os.walk('../test/minify'):
-			for name in files:
-				if name.endswith('.css'):
-					filename = os.path.join(root, name)
-					self.tests.append(FormatTest.parse_test(filename))
-
-	def test(self):
-		passed = 0
-		cssparse.Format.minify()
-		for filename, before, after in self.tests:
-			print filename,
-			doc = cssparse.CSSDoc.parse(before)
-			result = doc.format()
-			if result == after:
-				print 'OK'
-			else:
-				print '!! expected "%s", got "%s"' % (after, result)
-		cssparse.Format.pop()
-		assert passed == len(self.tests)
-
-	@staticmethod
-	def parse_test(filename):
-		try:
-			fd = open(filename, 'r')
-			t = fd.read()
-			fd.close()
-			bb = t.find('/* before ')
-			be = t.find('*/', bb) + 2
-			ab = t.find('/* after ', be)
-			ae = t.find('*/', ab) + 2
-			before = t[be:ab].strip()
-			after = t[ae:].strip()
-			return (filename, before, after)
-		except Exception as e:
-			print e
-			print 'test "%s" is fucked up. fix it!' % (filename,)
-			exit(1)
+		CSSUnitTests.__init__(self, 'minify')
 
 if __name__ == '__main__':
 
@@ -64,7 +28,7 @@ if __name__ == '__main__':
 	Opts, Args = op.parse_args()
 
 	if Opts.test:
-		f = FormatTest()
+		f = FormatUnitTests()
 		f.test()
 		exit(0)
 
