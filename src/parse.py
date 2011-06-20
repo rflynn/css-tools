@@ -87,7 +87,7 @@ exprbinop:= '+' / '-' / '*' / '/' / '||' / '&&'
 exprsinop:= '+' / '-'
 exprparen:= '(', space?, exprexpr, space?, ')'
 # NOTE: IE prefix hack
-name     := [*a-zA-Z_-],[a-zA-Z0-9_-]*
+name     := [*a-zA-Z_-],[\\a-zA-Z0-9_-]*
 hex      := [0-9a-fA-F]
 s        := (space/comment)+
 space    := [ \t\r\n\v\f]+
@@ -155,7 +155,18 @@ class CSSDoc:
 	Parser = Parser(CSS_EBNF)
 	def __init__(self, ast):
 		self.ast = ast
-		self.top = [TopLevel(a.child[0]) for a in ast]
+		#print 'CSSDoc ast:', ast
+		self.top = []
+		for a in ast:
+			#print 'a.child:', a.child
+			if a.child[0].tag == 'rule':
+				t = TopLevel(a.child[0])
+				self.top.append(t)
+			elif a.child[0].tag == 's':
+				for s in a.child[0].child:
+					t = TopLevel(s)
+					self.top.append(t)
+		#print 'CSSDoc top:', self.top
 		self.atrules = []
 		self.rules = []
 		for t in self.top:
@@ -202,15 +213,15 @@ class TopLevel:
 		return str(self.contents)
 	@staticmethod
 	def from_ast(ast):
+		#print 'TopLevel.from_ast ast:', ast
 		if ast.tag == 'rule':
 			return Rule.from_ast(ast)
-		elif ast.tag == 's':
-			if ast.child[0].child:
-				return Comment(ast)
-			else:
-				return Whitespace(ast)
-		else:
+		elif ast.tag == 'comment':
+			return Comment(ast)
+		elif ast.tag.startswith('@'):
 			return AtRule.from_ast(ast)
+		else:
+			return Whitespace(ast)
 	def format(self):
 		return self.contents.format()
 
@@ -228,7 +239,7 @@ class AtRule:
 	def from_ast(ast):
 		c = filter_space(ast.child)[0]
 		keyword = Ident.from_ast(c)
-		print 'AtRule.from_ast ast.child:', ast.child
+		#print 'AtRule.from_ast ast.child:', ast.child
 		vals = map(Value.from_ast,
 			filter_space(ast.child[2].child))
 		return AtRule(ast, keyword, vals)
@@ -269,7 +280,7 @@ class Comment:
 class Whitespace:
 	def __init__(self, ast):
 		self.ast = ast
-		self.s = self.ast.child[0].str
+		self.s = self.ast.str
 	def __repr__(self):
 		return 'Whitespace(%s)' % repr(self.s)
 	def format(self, forceshow=False):
