@@ -577,7 +577,7 @@ class Color:
 			if not name and rgb6 and rgb6 in Color.KEYWORDS_REV:
 				name = Color.KEYWORDS_REV[rgb6]
 		self.canonical = name if name else rgb6 if rgb6 else s
-		self.shortest = min(filter(None, [name, rgb3, s]), key=len)
+		self.shortest = name if name and len(name) < 4 else rgb3 if rgb3 else name
 	def __repr__(self):
 		return 'Color(%s)' % self.canonical
 	def format(self):
