@@ -1,0 +1,7 @@
+/*
+ * Ref: http://www.brunildo.org/test/csshacks.html
+ */
+/* before */
+selector { property: /**/value; }
+/* after */
+selector{property:/**/value}

@@ -1,0 +1,7 @@
+/*
+ * Ref: http://www.brunildo.org/test/csshacks.html
+ */
+/* before */
+*:first-child+html selector { property: value; }
+/* after */
+*:first-child+html selector{property:value}

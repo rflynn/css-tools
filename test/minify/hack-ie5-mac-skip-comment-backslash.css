@@ -1,0 +1,11 @@
+/*
+ * There is a hack that targets IE5/Mac using a bug when parsing comments.
+ * Ref: http://developer.yahoo.com/yui/compressor/css.html#hacks
+ */
+/* before */
+/* Ignore the next rule in IE mac \*/
+.selector {
+    color: khaki;
+}
+/* after */
+/*\*/.selector{color:khaki}

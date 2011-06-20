@@ -1,0 +1,7 @@
+/*
+ * Ref: http://www.brunildo.org/test/csshacks.html
+ */
+/* before */
+@media all and (min-width: 0px) { html:first-child selector { property: value; } }
+/* after */
+@media all and (min-width:0px){html:first-child selector{property:value}}

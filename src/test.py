@@ -28,9 +28,11 @@ class CSSUnitTests:
 			result = doc.format()
 			if result == after:
 				print 'OK'
+				passed += 1
 			else:
 				print '!! expected "%s", got "%s"' % (after, result)
 		cssparse.Format.pop()
+		print '%u/%u tests passed' % (passed, len(self.tests))
 		assert passed == len(self.tests)
 
 	@staticmethod

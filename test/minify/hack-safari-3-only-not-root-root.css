@@ -1,0 +1,7 @@
+/*
+ * Ref: http://www.brunildo.org/test/csshacks.html
+ */
+/* before */
+selector:not(:root:root) { property: value; }
+/* after */
+selector:not(:root:root){property:value}

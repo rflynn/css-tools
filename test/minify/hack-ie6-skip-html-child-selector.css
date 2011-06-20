@@ -1,0 +1,7 @@
+/*
+ * Ref: http://www.brunildo.org/test/csshacks.html
+ */
+/* before */
+html>body selector { property: value; }
+/* after */
+html>body selector{property:value}

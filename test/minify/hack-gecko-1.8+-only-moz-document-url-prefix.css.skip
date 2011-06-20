@@ -1,0 +1,7 @@
+/*
+ * Ref: http://www.brunildo.org/test/csshacks.html
+ */
+/* before */
+@-moz-document url-prefix() { selector { property: value; } }
+/* after */
+@-moz-document url-prefix(){selector{property:value}}

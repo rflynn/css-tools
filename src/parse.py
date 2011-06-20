@@ -20,10 +20,9 @@ from ast import AstNode
 # TODO: hsla(%,%,%,0.0)
 CSS_EBNF = r'''
 css      := toplevel*
-toplevel := rule/at_rule/s
+toplevel := at_rule/rule/s
 rule     := sels?,block
 sels     := sel,(s?,',',s?,sel)*,s?
-# FIXME: allows "> b{}"
 sel      := sel_ops,(s,sel_ops)*
 sel_ops  := sel_op+
 sel_op   := sel_tag/sel_class/sel_id/sel_psuedo/sel_child/sel_adj/sel_attr
@@ -37,7 +36,7 @@ sel_adj  := '+',s?,tag
 tag      := ident/sel_univ
 sel_univ := sel_univ2
 sel_univ2:= '*'
-at_rule  := at_kword,s,values,';'
+at_rule  := at_kword,s,values?,';'?
 at_kword := '@',ident
 block    := '{',s?,decls,s?,'}'
 decls    := decl?,(s?,';',s?,decl?)*,s?,';'?
@@ -167,8 +166,21 @@ class CSSDoc:
 	def __repr__(self): return ','.join(map(str, self.top))
 	def format(self):
 		nl = '' if Format.Minify else '\n'
+		"""
 		return (nl.join(t.format() for t in self.atrules) + nl + \
 			''.join(t.format() for t in self.rules)).strip()
+		"""
+		s = ''
+		for t in self.top:
+			if isinstance(t.contents, Comment) and Format.Minify and \
+				(t.contents.text == '' or '\\' in t.contents.text):
+				# assume browser-specific hack, preserve
+				# see: test/minify/hack-ie5-mac-backslash.css
+				txt = t.contents.text
+				s += '/*' + txt[max(0, txt.find('\\')):] + '*/'
+			else:
+				s += t.format() + nl
+		return s
 	@staticmethod
 	def parse(text):
 		prod = 'css'
@@ -210,11 +222,13 @@ class AtRule:
 	def __repr__(self): return 'AtRule(%s)' % str(self.ast)
 	def format(self):
 		return self.keyword.format() + ' ' + \
-			' '.join([v.format() for v in self.vals]) + ';'
+			' '.join([v.format() for v in self.vals]) + \
+			(';' if not isinstance(self.vals[-1], Decls) else '')
 	@staticmethod
 	def from_ast(ast):
 		c = filter_space(ast.child)[0]
 		keyword = Ident.from_ast(c)
+		print 'AtRule.from_ast ast.child:', ast.child
 		vals = map(Value.from_ast,
 			filter_space(ast.child[2].child))
 		return AtRule(ast, keyword, vals)
@@ -249,8 +263,8 @@ class Comment:
 		self.text = c.child[0].str if c.child else ''
 	def __repr__(self):
 		return 'Comment(%s)' % self.text
-	def format(self):
-		return '/*' + self.text + '*/' if not Format.Minify else ''
+	def format(self, preserve=False):
+		return '/*' + self.text + '*/' if preserve or not Format.Minify else ''
 
 class Whitespace:
 	def __init__(self, ast):
@@ -385,7 +399,7 @@ class Decls:
 		le = ';' + nl
 		return '{' + nl + \
 			((le.join(nd + d.format() for d in self.decl) +
-			 (';' if Format.Decl.LastSemi and not Format.Minify else '') + nl) \
+			 (';' if (not isinstance(self.decl[-1].values[0], Decls)) and Format.Decl.LastSemi and not Format.Minify else '') + nl) \
 				if self.decl else '') + '}'
 	def __hash__(self):
 		return hash(str(sorted(self.decl)))
@@ -442,7 +456,7 @@ class Decl:
 	@staticmethod
 	def from_ast(ast):
 		"""generate a Decl from an AstNode"""
-		#print 'Decl ast:', ast
+		print 'Decl ast:', ast
 		nospace = list(filter_space(ast.child))
 		prop,vals = nospace
 		d = Decl(prop.str, [])
@@ -452,8 +466,9 @@ class Decl:
 class Value:
 	@staticmethod
 	def from_ast(ast):
+		print 'Value ast:', ast
 		v = ast.child[0]
-		if v.tag not in ('any', 'at_kword'):
+		if v.tag not in ('any', 'at_kword', 'block'):
 			print 'ast:', ast
 			raise Exception('unsupported: ' + str(v.tag))
 		x = v.child[0]
@@ -472,6 +487,7 @@ class Value:
 		elif x.tag == 'expr':	return Expression(x)
 		elif x.tag == 'uri':	return Uri(x)
 		elif x.tag == 'filter':	return Filter(x)
+		elif x.tag == 'decls':	return Decls.from_ast(v)
 		raise Exception('unexpected: Value.from_ast() x.tag: ' + x.tag)
 		return ast
 
