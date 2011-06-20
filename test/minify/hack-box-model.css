@@ -1,0 +1,16 @@
+/*
+ * This hack uses valid CSS and there's no special use of comments so it's retained.
+ * Ref: http://developer.yahoo.com/yui/compressor/css.html#hacks
+ */
+/* before */
+#elem {
+    width: 100px; /* IE */
+    voice-family: "\"}\"";
+    voice-family:inherit;
+    width: 200px; /* others */
+}
+html>body #elem {
+    width: 200px; /* others */
+}
+/* after */
+#elem{width:100px;voice-family:"\"}\"";voice-family:inherit;width:200px}html>body #elem{width:200px}
