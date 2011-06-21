@@ -18,6 +18,7 @@ from ast import AstNode
 # TODO: rgb(r,g,b[,a])
 # TODO: hsl(%,%,%)
 # TODO: hsla(%,%,%,0.0)
+# TODO: support crazy CSS3 selectors http://www.w3.org/TR/css3-selectors/
 CSS_EBNF = r'''
 css      := toplevel*
 toplevel := at_rule/rule/s
