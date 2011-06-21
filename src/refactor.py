@@ -185,11 +185,10 @@ class CSSRefactor:
 		foo = []
 		for sel, decls in sels_merged.items():
 			dcomb = CSSRefactor.decls_property_combine(decls)
-			foo.append((sel, dcomb))
+			dcomb2 = CSSRefactor.decls_values_combine(dcomb)
+			foo.append((sel, dcomb2))
 
 		# merge selectors having identical decls
-		# TODO: would be better if we identified subsets of decls that were longer than their selector name,
-		# then merged those, breaking decls up
 		identical_decls = defaultdict(list)
 		for s, d in foo:
 			identical_decls[d].append(s)
@@ -359,6 +358,17 @@ class CSSRefactor:
 		return block 
 
 	@staticmethod
+	def decls_values_combine(block):
+		"""any list of box-model values can potentially be optimized"""
+		for decl in block.decl:
+			if decl.property in PROPERTIES:
+				_, merger, _ = PROPERTIES[decl.property]
+				vals = CSSRefactor.vals_merge(merger, decl.values)
+				if vals != decl.values:
+					decl.values = vals
+		return block
+
+	@staticmethod
 	def properties_merge(parent, decl):
 		"""given a parent property string and a list of child decls,
 		generate the equivalent combined Decl for the parent"""
@@ -386,8 +396,15 @@ class CSSRefactor:
 		vals = merger.post_process(vals)
 		# we no longer need the Decl properties; strip Decl into values
 		vals = flatten([d.values for d in vals])
-		if len(vals) == 4 and isinstance(merger, Box):
-			if vals[0] == vals[2]:
+
+		return Decl(parent, vals)
+
+	@staticmethod
+	def vals_merge(merger, vals):
+		if isinstance(merger, Box):
+			if len(vals) > 1 and all(v == vals[0] for v in vals):
+				vals = vals[:1]
+			elif len(vals) == 4 and vals[0] == vals[2]:
 				if vals[1] == vals[3]:
 					if vals[0] == vals[1]:
 						# [top, right, bottom, left] -> [top/right/bottom/left]
@@ -398,7 +415,7 @@ class CSSRefactor:
 				else:
 					# [top, right, bottom, left] -> [top, left/right, bottom]
 					vals = vals[:3]
-		return Decl(parent, vals)
+		return vals
 
 	@staticmethod
 	def decls_find_duplicate_properties(doc):

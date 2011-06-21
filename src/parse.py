@@ -478,7 +478,6 @@ class Decl:
 	def from_ast(ast):
 		"""generate a Decl from an AstNode"""
 		#print 'Decl ast:', ast
-		# Decl ast: decl([property(['property']), s([comment([''])]), ':', s([' ']), values([value([any([ident(['value'])])])])])
 		c = ast.child
 		#print 'Decl c[1].child:', c[1].child
 		prop_idx = first_index(c, lambda t: t.tag == 'property')
@@ -550,6 +549,7 @@ class Percent:
 	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class Dimension:
+	KNOWN_UNITS = ('px','em','%','in','pt')
 	def __init__(self, ast):
 		self.ast = ast
 		n = ast.child[0]
@@ -557,7 +557,12 @@ class Dimension:
 		u = ast.child[1] if len(ast.child) > 1 else ''
 		self.unit = Ident.from_ast(u.child[0])
 	def __repr__(self): return 'Dimension(%s,%s)' % (self.num, self.unit)
-	def format(self): return self.num.format() + self.unit.format()
+	def format(self):
+		nf = self.num.format()
+		uf = self.unit.format()
+		if Format.Minify and (nf == '0' and uf.lower() in Dimension.KNOWN_UNITS):
+			uf = ''
+		return nf + uf
 	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class String:
@@ -624,8 +629,11 @@ class Color:
 			elif len(sl) == 4:
 				rgb3 = sl
 				rgb6 = '#' + (sl[1] * 2) + (sl[2] * 2) + (sl[3] * 2)
-			if not name and rgb6 and rgb6 in Color.KEYWORDS_REV:
-				name = Color.KEYWORDS_REV[rgb6]
+			if not name:
+				if rgb6 and rgb6 in Color.KEYWORDS_REV:
+					name = Color.KEYWORDS_REV[rgb6]
+				else:
+					name = s
 		self.canonical = name if name else rgb6 if rgb6 else s
 		self.shortest = name if name and len(name) < 4 else rgb3 if rgb3 else name
 	def __repr__(self):
