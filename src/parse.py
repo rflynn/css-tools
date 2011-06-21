@@ -549,7 +549,6 @@ class Percent:
 	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class Dimension:
-	KNOWN_UNITS = ('px','em','%','in','pt')
 	def __init__(self, ast):
 		self.ast = ast
 		n = ast.child[0]
@@ -560,7 +559,9 @@ class Dimension:
 	def format(self):
 		nf = self.num.format()
 		uf = self.unit.format()
-		if Format.Minify and (nf == '0' and uf.lower() in Dimension.KNOWN_UNITS):
+		# "After the '0' length, the unit identifier is optional."
+		# Ref: http://www.w3.org/TR/css3-values/#lengths
+		if Format.Minify and nf == '0':
 			uf = ''
 		return nf + uf
 	def __cmp__(self, other): return cmp(str(self), str(other))
