@@ -323,8 +323,9 @@ class Sels:
 class Sel:
 	def __init__(self, sel):
 		#print 'Sel ast:', ast
-		self.sel = sel#map(Sel.from_ast, filter_space(ast.child))
+		self.sel = sel
 		#print 'Sel.sel:', self.sel
+		# FIXME: this is hideous
 		Format.minify()
 		f = self.format()
 		Format.pop()
