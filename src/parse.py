@@ -96,6 +96,9 @@ comment  := '/*', commtext, '*/'
 commtext := -"*/"*
 '''
 
+# TODO: disparate values like Percent and Dimension should __cmp__ equal
+# if they're both '0'
+
 class Format:
 	"""Options for CSS formatting"""
 	Minify = False
@@ -545,7 +548,11 @@ class Percent:
 		self.s = ast.child[0].str
 		self.f = float(self.s)
 	def __repr__(self): return 'Percent(%s%%)' % self.s
-	def format(self): return self.s + '%'
+	def format(self):
+		unit = '%'
+		if Format.Minify and self.s == '0':
+			unit = ''
+		return self.s + unit
 	def __cmp__(self, other): return cmp(str(self), str(other))
 
 class Dimension:
