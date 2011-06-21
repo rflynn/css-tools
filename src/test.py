@@ -13,17 +13,20 @@ class CSSUnitTests:
 	PATH = '../test/'
 	def __init__(self, testdir):
 		self.tests = []
+		self.skipped = []
 		for root, dirs, files in os.walk(CSSUnitTests.PATH + testdir):
 			for name in files:
+				filename = os.path.join(root, name)
 				if name.endswith('.css'):
-					filename = os.path.join(root, name)
 					self.tests.append(CSSUnitTests.parse_test(filename))
+				elif '.css.' in name:
+					self.skipped.append(filename)
 
 	def test(self):
 		passed = 0
 		cssparse.Format.minify()
 		for filename, before, after in self.tests:
-			print filename,
+			print filename[len(CSSUnitTests.PATH):],
 			doc = cssparse.CSSDoc.parse(before)
 			result = doc.format()
 			if result == after:
@@ -32,7 +35,8 @@ class CSSUnitTests:
 			else:
 				print '!! expected "%s", got "%s"' % (after, result)
 		cssparse.Format.pop()
-		print '%u/%u tests passed' % (passed, len(self.tests))
+		print '%u/%u tests passed%s' % (passed, len(self.tests),
+			', %u skipped' % len(self.skipped) if self.skipped else '')
 		assert passed == len(self.tests)
 
 	@staticmethod
