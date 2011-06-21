@@ -191,8 +191,7 @@ class CSSDoc:
 		nl = '' if Format.Minify else '\n'
 		s = ''
 		for t in self.top:
-			if isinstance(t.contents, Comment) and Format.Minify and \
-				(t.contents.text == '' or '\\' in t.contents.text):
+			if t.is_comment_hack() and Format.Minify:
 				# assume browser-specific hack, preserve
 				# see: test/minify/hack-ie5-mac-backslash.css
 				txt = t.contents.text
@@ -219,6 +218,9 @@ class TopLevel:
 		self.contents = TopLevel.from_ast(ast)
 	def __repr__(self):
 		return str(self.contents)
+	def is_comment_hack(self):
+		return isinstance(self.contents, Comment) and \
+			(self.contents.text == '' or '\\' in self.contents.text)
 	@staticmethod
 	def from_ast(ast):
 		#print 'TopLevel.from_ast ast:', ast
