@@ -7,14 +7,15 @@ MIT licensed: http://www.opensource.org/licenses/mit-license.php
 
 Goal:
 	An intuitive CSS toolkit that allows people to work on nicely
-	formatted CSS, then automatically refactor and minification for
-	publication. It should stay out of your way, Do The Right Thing
-	and Just Work.
+	formatted CSS, then automatically refactor and minify for
+	publication. It stays out of your way, Does The Right Thing
+	and Just Works.
 
 Interface:
 	css-format
 		css-format --minify
 	css-refactor
+		css-refactor --aggressive
 	css-check
 
 Install:
