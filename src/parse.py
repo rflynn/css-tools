@@ -10,6 +10,7 @@ MIT licensed: http://www.opensource.org/licenses/mit-license.php
 
 from simpleparse.parser import Parser
 from itertools import chain
+import string
 from sys import stdin
 import fcntl, os, sys
 
@@ -264,6 +265,8 @@ class Rule:
 		if selstr and not Format.Minify:
 			selstr += ' '
 		return selstr + self.decls.format()
+	def has_hacks(self):
+		return self.decls.has_hacks()
 	@staticmethod
 	def from_ast(ast):
 		if ast.child[0].tag == 'sels':
@@ -422,6 +425,7 @@ class Decls:
 			((le.join(nd + d.format() for d in self.decl) +
 			 (';' if (not isinstance(self.decl[-1].values[0], Decls)) and Format.Decl.LastSemi and not Format.Minify else '') + nl) \
 				if self.decl else '') + '}'
+	def has_hacks(self): return any(d.has_hacks() for d in self.decl)
 	def __hash__(self):
 		return hash(str(sorted(self.decl)))
 	def __cmp__(self, other):
@@ -449,6 +453,9 @@ class Decl:
 		self.pre_vals_s = pre_vals_s if pre_vals_s else Whitespace('')
 		self.values = values
 		self._str = None
+		# record whether this Decl contains possible browser-specific hacks
+		self._hacks = post_prop_s or pre_vals_s or self.property[0] in string.punctuation
+	def has_hacks(self): return self._hacks
 	def __repr__(self):
 		if not self._str:
 			self._str = 'Decl(%s:%s)' % (self.property, self.values)
