@@ -746,6 +746,12 @@ if __name__ == '__main__':
 	'@import url();',
 	'@import url("foo") bar, baz;',
 	'@page foo;',
+	# TODO: support these constructs
+	'''a[title="a not s\\
+o very long title"] {/*...*/}''',
+	'@media all and (min-width: 0px) { html:first-child selector { property: value; } }',
+	'@-moz-document url-prefix() { selector { property: value; } }',
+	'selector:not(:root:root) { property: value; }',
 	]
 
 	# read from stdin if it's available
@@ -763,12 +769,15 @@ if __name__ == '__main__':
 
 	print 'Testing parser...'
 
+	passed = 0
 	for t in CSS_TESTS:
 		try:
 			doc = CSSDoc.parse(t)
+			passed += 1
 		except:
 			print t
 			print sys.exc_info()
 
-	print 'Tests passed (%u)' % len(CSS_TESTS)
+
+	print 'Tests passed (%u/%u)' % (passed, len(CSS_TESTS))
 
