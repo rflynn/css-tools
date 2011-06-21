@@ -262,8 +262,7 @@ class Rule:
 		selstr = self.sels.format()
 		if selstr and not Format.Minify:
 			selstr += ' '
-		nl = '\n' if not Format.Minify else ''
-		return selstr + self.decls.format() + nl
+		return selstr + self.decls.format()
 	@staticmethod
 	def from_ast(ast):
 		if ast.child[0].tag == 'sels':
