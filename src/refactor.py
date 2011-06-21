@@ -22,18 +22,17 @@ from parse import Rule, Sels, Decls, Decl, Ident, Delim
 def flatten(l): return list(chain.from_iterable(l))
 
 # css string sort: # '@' < '*' < [a-zA-Z_] < '#' < '.' < '-'
+# Unicode code points are within 'the range of integers from 0 to 0x10FFFF.'
+# Ref: http://unicode.org/glossary/#code_point
 FIRSTCHAR = {
-	'.' : 0xffffffff,
-	'#' : 0xfffffffe,
-	'-' : 0xfffffffd,
+	'.' : 0x110002,
+	'#' : 0x110001,
+	'-' : 0x110000,
 	'*' : -1,
 	'@' : -2,
 }
 def css_strcmp(x, y):
-	x = str(x)
-	y = str(y)
-	if len(x) > 0 and len(y) > 0:
-		global FIRSTCHAR
+	if x and y:
 		x0 = FIRSTCHAR.get(x[0], ord(x[0]))
 		y0 = FIRSTCHAR.get(y[0], ord(y[0]))
 		if x0 != y0:
