@@ -404,17 +404,22 @@ class CSSRefactor:
 		if isinstance(merger, Box):
 			if len(vals) > 1 and all(v == vals[0] for v in vals):
 				vals = vals[:1]
-			elif len(vals) == 4 and vals[0] == vals[2]:
-				if vals[1] == vals[3]:
-					if vals[0] == vals[1]:
-						# [top, right, bottom, left] -> [top/right/bottom/left]
-						vals = vals[:1]
+			elif len(vals) == 4:
+				if vals[0] == vals[2]:
+					if vals[1] == vals[3]:
+						if vals[0] == vals[1]:
+							# [top, right, bottom, left] -> [top/right/bottom/left]
+							vals = vals[:1]
+						else:
+							# [top, right, bottom, left] -> [top/bottom, left/right]
+							vals = vals[:2]
 					else:
-						# [top, right, bottom, left] -> [top/bottom, left/right]
-						vals = vals[:2]
-				else:
-					# [top, right, bottom, left] -> [top, left/right, bottom]
+						# [top, right, bottom, left] -> [top, left/right, bottom]
+						vals = vals[:3]
+				elif vals[1] == vals[3]:
 					vals = vals[:3]
+			elif len(vals) == 3 and vals[0] == vals[2]:
+				vals = vals[:2]
 		return vals
 
 	@staticmethod
