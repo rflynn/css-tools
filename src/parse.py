@@ -63,7 +63,7 @@ filterkv := name, '=', sqstring
 sqstring := "'", sqchars, "'"
 sqchars  := -"'"*
 string   := '"',chars,'"'
-chars    := ('\\"'/-'"')*
+chars    := (('\\',[\000-\377])/-'"')*
 inc      := '=~'
 bareq    := '|='
 ident    := ident2
