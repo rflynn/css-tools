@@ -4,4 +4,4 @@
 /* before */
 /*\*//*/ selector { property: value; } /**/
 /* after */
-/*\*//*/selector{property:value}/**/
+/*\*//*/ selector { property: value; } /**/

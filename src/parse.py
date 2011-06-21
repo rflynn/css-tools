@@ -40,7 +40,8 @@ at_rule  := at_kword,s,values?,';'?
 at_kword := '@',ident
 block    := '{',s?,decls,s?,'}'
 decls    := decl?,(s?,';',s?,decl?)*,s?,';'?
-decl     := property,s?,':',s?,values
+decl     := property,s?,colon,s?,values
+colon    := ':'
 property := name
 values   := value,(s?,value)*,s?
 value    := any/block
@@ -151,6 +152,12 @@ class Format:
 # strip whitespace and comments
 def filter_space(l): return filter(lambda c: c.tag not in ('s','comment'), l)
 
+def first_index(lst, pred):
+    for i,v in enumerate(lst):
+        if pred(v):
+            return i
+    return None
+
 class CSSDoc:
 	Parser = Parser(CSS_EBNF)
 	def __init__(self, ast):
@@ -187,7 +194,7 @@ class CSSDoc:
 				s += '/*' + txt[max(0, txt.find('\\')):] + '*/'
 			else:
 				s += t.format() + nl
-		return s
+		return s.strip()
 	@staticmethod
 	def parse(text):
 		prod = 'css'
@@ -213,11 +220,11 @@ class TopLevel:
 		if ast.tag == 'rule':
 			return Rule.from_ast(ast)
 		elif ast.tag == 'comment':
-			return Comment(ast)
+			return Comment.from_ast(ast)
 		elif ast.tag.startswith('@'):
 			return AtRule.from_ast(ast)
 		else:
-			return Whitespace(ast)
+			return Whitespace.from_ast(ast)
 	def format(self):
 		return self.contents.format()
 
@@ -264,18 +271,19 @@ class Rule:
 		return Rule(sels, decls)
 
 class Comment:
-	def __init__(self, ast):
-		self.ast = ast
-		self.text = ast.child[0].str
+	def __init__(self, text):
+		self.text = text
 	def __repr__(self):
 		return 'Comment(%s)' % self.text
 	def format(self, preserve=False):
-		return '/*' + self.text + '*/' if preserve or not Format.Minify else ''
+		return '/*' + self.text + '*/' if preserve or not Format.Minify or self.text.endswith('/*') else ''
+	@staticmethod
+	def from_ast(ast):
+		return Comment(ast.child[0].str)
 
 class Whitespace:
-	def __init__(self, ast):
-		self.ast = ast
-		self.s = self.ast.str
+	def __init__(self, s):
+		self.s = s
 	def __repr__(self):
 		return 'Whitespace(%s)' % repr(self.s)
 	def format(self, forceshow=False):
@@ -286,6 +294,9 @@ class Whitespace:
 		if not Format.Unmodified and self.s.count('\n') > 1:
 			return '\n'
 		return self.s
+	@staticmethod
+	def from_ast(ast):
+		return Whitespace(ast.str)
 
 class Sels:
 	def __init__(self, sel):
@@ -425,11 +436,13 @@ class Decls:
 		return Decls(self.decl + other.decl)
 
 class Decl:
-	def __init__(self, property_, values, ast=None):
+	def __init__(self, property_, values, ast=None, post_prop_s='', pre_vals_s=''):
 		self.ast = ast
 		#print 'Decl ast:', ast
 		self.property = property_
 		self.propertylow = self.property.lower()
+		self.post_prop_s = post_prop_s if post_prop_s else Whitespace('')
+		self.pre_vals_s = pre_vals_s if pre_vals_s else Whitespace('')
 		self.values = values
 		self._str = None
 	def __repr__(self):
@@ -454,7 +467,8 @@ class Decl:
 			sp = '' if currNoSpace or prevNoSpace else ' '
 			valstr += sp + v.format()
 			prev = v
-		return	self.property + ':' + \
+		return self.property + self.post_prop_s.format(True) + ':' + \
+			self.pre_vals_s.format(True) + \
 			(' ' if Format.Decl.Value.LeadingSpace else '') + valstr
 	def __eq__(self, other):
 		return self.propertylow == other.property and self.values == other.values
@@ -464,10 +478,23 @@ class Decl:
 	def from_ast(ast):
 		"""generate a Decl from an AstNode"""
 		#print 'Decl ast:', ast
-		nospace = list(filter_space(ast.child))
-		prop,vals = nospace
-		d = Decl(prop.str, [], ast)
-		d.values = map(Value.from_ast, filter_space(vals.child))
+		# Decl ast: decl([property(['property']), s([comment([''])]), ':', s([' ']), values([value([any([ident(['value'])])])])])
+		c = ast.child
+		#print 'Decl c[1].child:', c[1].child
+		prop_idx = first_index(c, lambda t: t.tag == 'property')
+		col_idx = first_index(c, lambda t: t.str == ':')
+		vals_idx = first_index(c, lambda t: t.tag == 'values')
+		post_prop_s = None
+		pre_vals_s = None
+		#print 'prop_idx=%u col_idx=%u vals_idx=%u' % (prop_idx, col_idx, vals_idx)
+		if col_idx == prop_idx+2 and c[col_idx-1].child:
+			#print 'c[col_idx-1].str(%s)' % c[col_idx-1].str
+			post_prop_s = Whitespace(c[col_idx-1].str)
+		if vals_idx == col_idx+2 and c[col_idx+1].child:
+			pre_vals_s = Whitespace(c[col_idx+1].str.strip())
+		prop = ast.child[0]
+		d = Decl(prop.str, [], ast, post_prop_s, pre_vals_s)
+		d.values = map(Value.from_ast, filter_space(c[vals_idx].child))
 		return d
 
 class Value:

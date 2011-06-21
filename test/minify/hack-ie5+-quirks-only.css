@@ -4,4 +4,4 @@
 /* before */
 * html selector { property /**/: value; }
 /* after */
-* html selector{property /**/: value}
+* html selector{property /**/:value}
