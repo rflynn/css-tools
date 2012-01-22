@@ -58,4 +58,9 @@ class CSSUnitTests:
 			exit(1)
 
 if __name__ == '__main__':
-	pass
+	# run unit tests
+	for root, dirs, files in os.walk(CSSUnitTests.PATH):
+		for d in dirs:
+			print '%s...' % (d,)
+			t = CSSUnitTests(d)
+			t.test()
