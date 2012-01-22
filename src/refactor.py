@@ -107,6 +107,7 @@ PROPERTIES = {
 	'background-image'	: (False, None, []),
 	'background-repeat'	: (False, None, []),
 	'background-attachment'	: (False, None, []),
+	'background-position'	: (False, None, []),
 
 	'border'		: (False, Box('border'),
 		[
