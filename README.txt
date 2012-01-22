@@ -11,20 +11,19 @@ Goal:
 	publication. It stays out of your way, Does The Right Thing
 	and Just Works.
 
+Get Started!
+	$ sudo apt-get install python-dev python-setuptools
+	$ sudo easy_install simpleparse
+	$ git clone git@github.com:rflynn/css-tools.git
+	$ cd css-tools
+	$ make test
+
 Interface:
 	css-format
 		css-format --minify
 	css-refactor
 		css-refactor --aggressive
 	css-check
-
-Install:
-	sudo easy_install simpleparse
-	if that breaks, install the python headers:
-		sudo apt-get install python-dev
-		sudo yum install python-dev
-	git clone git@github.com:rflynn/css-tools.git
-	cd css-tools/src
 
 Bugs: https://github.com/rflynn/css-tools/issues
 
