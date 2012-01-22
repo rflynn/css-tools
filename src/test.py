@@ -8,10 +8,12 @@ Base unit test object for css-tools
 import os
 
 import parse as cssparse
+import refactor as cssrefactor
 
 class CSSUnitTests:
 	PATH = '../test/'
 	def __init__(self, testdir):
+		self.testdir = testdir
 		self.tests = []
 		self.skipped = []
 		for root, dirs, files in os.walk(CSSUnitTests.PATH + testdir):
@@ -24,10 +26,22 @@ class CSSUnitTests:
 
 	def test(self):
 		passed = 0
-		cssparse.Format.minify()
-		for filename, before, after in self.tests:
+		for filename, before, after, afteropts in self.tests:
 			print filename[len(CSSUnitTests.PATH):],
+			# handle "after" options
+			do_minify =  afteropts.find('minify') > -1
+			do_aggressive =  afteropts.find('aggressive') > -1
 			doc = cssparse.CSSDoc.parse(before)
+			if self.testdir == 'refactor':
+				ref = cssrefactor.CSSRefactor(doc)
+				if do_aggressive:
+					for _ in ref.aggressive(yield_step=True, step_max=100):
+						pass
+				doc = cssparse.CSSDoc.parse(ref.format())
+			if do_minify:
+				cssparse.Format.minify()
+			else:
+				cssparse.Format.canonical()
 			result = doc.format()
 			if result == after:
 				print 'OK'
@@ -50,7 +64,8 @@ class CSSUnitTests:
 			ae = t.find('*/', ab) + 2
 			before = t[be:ab].strip()
 			after = t[ae:].strip()
-			return (filename, before, after)
+			afteropts = t[ab:ae].strip()
+			return (filename, before, after, afteropts)
 		except Exception as e:
 			print e
 			print 'test "%s" is fucked up. fix it!' % (filename,)

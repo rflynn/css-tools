@@ -14,18 +14,16 @@
   margin: 0.5em;
   border: solid 1px black;
 }
-/* after */
-.boxOut {
-  width: 12em;
-  padding: 0.5em;
-  margin: 0.5em;
-  border: solid 1px black;
+/* after (aggressive) */
+.oddBoxOut, .evenBoxOut {
+	padding: 0.5em;
+	border: solid 1px black;
+	margin: 0.5em;
+	width: 12em;
 }
-
-.oddBoxOut {
-  float: left;
-}
-
 .evenBoxOut {
-  float: right;
+	float: right;
+}
+.oddBoxOut {
+	float: left;
 }

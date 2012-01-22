@@ -8,5 +8,5 @@ a,d {
 a {
 	margin-left:1px; margin-right:1px
 }
-/* after */
+/* after (minify) */
 a{margin:1px}d{margin-bottom:1px}

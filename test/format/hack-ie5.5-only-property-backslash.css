@@ -3,5 +3,5 @@
  */
 /* before */
 selector { property: value; p\roperty: normal-value; }
-/* after */
+/* after (minify) */
 selector{property:value;p\roperty:normal-value}

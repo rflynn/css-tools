@@ -3,5 +3,5 @@
  */
 /* before */
 selector { property/**/: value; }
-/* after */
+/* after (minify) */
 selector{property/**/:value}

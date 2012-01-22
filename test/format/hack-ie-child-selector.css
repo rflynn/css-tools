@@ -7,5 +7,5 @@
 html >/**/ body p {
     color: blue;
 }
-/* after */
+/* after (minify) */
 html>/**/body p{color:#00f}

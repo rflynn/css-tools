@@ -8,5 +8,5 @@
     *width: 2pt;
     _width: 3em;
 }
-/* after */
+/* after (minify) */
 #element{width:1px;*width:2pt;_width:3em}

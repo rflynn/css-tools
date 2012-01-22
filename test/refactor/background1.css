@@ -1,9 +1,11 @@
 /* before */
 body
 {
+background-color: #ffffff;
 background-image:url('img_tree.png');
 background-repeat:no-repeat;
+background-attachment:fixed;
 background-position:right top;
 }
 /* after (minify) */
-body{background:url('img_tree.png')no-repeat right top}
+body{background:#fff url(img_tree.png)no-repeat fixed right top}

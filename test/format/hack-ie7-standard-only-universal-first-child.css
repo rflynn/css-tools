@@ -3,5 +3,5 @@
  */
 /* before */
 *:first-child+html selector { property: value; }
-/* after */
+/* after (minify) */
 *:first-child+html selector{property:value}

@@ -1,0 +1,4 @@
+/* before */
+input[type="radio"] { vertical-align: text-bottom; }
+/* after (minify) */
+input[type="radio"]{vertical-align:text-bottom}

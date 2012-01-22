@@ -3,5 +3,5 @@
  */
 /* before */
 @-moz-document url-prefix() { selector { property: value; } }
-/* after */
+/* after (minify) */
 @-moz-document url-prefix(){selector{property:value}}

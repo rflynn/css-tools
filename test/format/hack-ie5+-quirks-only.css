@@ -3,5 +3,5 @@
  */
 /* before */
 * html selector { property /**/: value; }
-/* after */
+/* after (minify) */
 * html selector{property /**/:value}
