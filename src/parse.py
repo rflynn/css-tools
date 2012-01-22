@@ -31,7 +31,10 @@ sel_tag  := tag
 sel_class:= '.',tag
 sel_id   := '#',tag
 sel_psuedo:=':',tag
-sel_attr := '[',tag,']'
+sel_attr := '[',sel_attr_sel,']'
+sel_attr_sel := tag,(sel_attr_op,sel_attr_val)?
+sel_attr_val := any
+sel_attr_op := '='
 sel_child:= '>',s?,tag
 sel_adj  := '+',s?,tag
 tag      := ident/sel_univ
@@ -383,7 +386,13 @@ class Sel_Op:
 		elif c.tag == 'sel_adj':	self.op = Sel_Op.ADJ
 		elif c.tag == 'sel_attr':	self.op = Sel_Op.ATTR
 		#print 'Sel_Op c.tag:', c.tag, 'c.child:', c.child
-		self.s = list(filter_space(c.child))[0].child[0].child[0].str
+		args = list(filter_space(c.child))[0].child
+		self.s = args[0].child[0].str
+		self.sel_op = None
+		self.operand = None
+		if len(args) > 1:
+			self.sel_op = args[1].str
+			self.operand = Value.from_ast(args[2])
 		#print 'Sel_Op self.s:', self.s
 	def __repr__(self):
 		return 'Sel_Op(%s)' % self.format()
@@ -406,7 +415,10 @@ class Sel_Op:
 				pass
 			s += sp + self.s
 		elif self.op == Sel_Op.ADJ:	s = '+' + sp + s
-		elif self.op == Sel_Op.ATTR:	s = '['  + s + ']'
+		elif self.op == Sel_Op.ATTR:
+			if self.sel_op:
+				s += str(self.sel_op) + str(self.operand)
+			s = '[' + s + ']'
 		return s
 
 class Decls:
@@ -746,6 +758,7 @@ if __name__ == '__main__':
 	'@import url();',
 	'@import url("foo") bar, baz;',
 	'@page foo;',
+	"""input[type="radio"] { vertical-align: text-bottom; }""", # https://github.com/rflynn/css-tools/issues/1
 	# TODO: support these constructs
 	'''a[title="a not s\\
 o very long title"] {/*...*/}''',
