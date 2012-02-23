@@ -327,7 +327,7 @@ class Sels:
 class Sel:
 	def __init__(self, sel):
 		#print 'Sel ast:', ast
-		self.sel = sel
+		self.sel = sorted(sel)
 		#print 'Sel.sel:', self.sel
 		# FIXME: this is hideous
 		Format.minify()
