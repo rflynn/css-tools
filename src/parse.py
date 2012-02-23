@@ -765,6 +765,7 @@ o very long title"] {/*...*/}''',
 	'@media all and (min-width: 0px) { html:first-child selector { property: value; } }',
 	'@-moz-document url-prefix() { selector { property: value; } }',
 	'selector:not(:root:root) { property: value; }',
+    '.x { -webkit-transform:translate3d(0,0,0); }', # https://github.com/rflynn/css-tools/issues/5
 	]
 
 	# read from stdin if it's available
