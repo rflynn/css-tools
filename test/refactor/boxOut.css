@@ -15,7 +15,7 @@
   border: solid 1px black;
 }
 /* after (aggressive) */
-.oddBoxOut, .evenBoxOut {
+.evenBoxOut, .oddBoxOut {
 	padding: 0.5em;
 	border: solid 1px black;
 	margin: 0.5em;
