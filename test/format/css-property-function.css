@@ -1,0 +1,10 @@
+/*
+ * verify that we can parse and spit back CSS Property Functions unharmed
+ * https://developer.apple.com/library/safari/#documentation/appleapplications/reference/SafariCSSRef/Articles/Functions.html
+ */
+/* before */
+.x { -webkit-transform:translate3d(0,0,0); }
+/* after (canonical) */
+.x {
+	-webkit-transform: translate3d(0,0,0);
+}

@@ -49,7 +49,7 @@ colon    := ':'
 property := name
 values   := value,(s?,value)*,s?
 value    := any/block
-any      := percent/dim/hash/expr/uri/string/sqstring/filter/ident/num/inc/bareq/delim
+any      := percent/dim/hash/expr/uri/string/sqstring/filter/propfunc/ident/num/inc/bareq/delim
 percent  := num,'%'
 dim      := num,ident
 hash     := '#',hex+
@@ -81,11 +81,12 @@ num      := number
 number   := [-]?,[0-9]+,('.',[0-9]+)?
 delim    := delimiter
 delimiter:= '!'/','/'/'
+propfunc := exprcall
 expr     := 'expression(', space?, exprexpr?, space?, ')'
 exprexpr := exprterm, (space?, exprop)*
 exprop   := exprbinop, space?, exprexpr
 exprterm := num / exprstr / ('(', space?, exprexpr?, space?, ')') / exprcall / exprident
-exprcall := exprident, '(', space?, exprexpr?, space?, ')'
+exprcall := exprident, '(', space?, exprexpr?, (space?, ',', exprexpr)*, space?, ')'
 exprident:= name, ('.', name)*
 exprstr  := "'", -"'"*, "'"
 exprbinop:= '+' / '-' / '*' / '/' / '||' / '&&'
@@ -534,6 +535,7 @@ class Value:
 		elif x.tag == 'dim':	return Dimension(x)
 		elif x.tag == 'delim':	return Delim.from_ast(x)
 		elif x.tag == 'expr':	return Expression(x)
+		elif x.tag == 'propfunc':return Expression(x)
 		elif x.tag == 'uri':	return Uri(x)
 		elif x.tag == 'filter':	return Filter(x)
 		elif x.tag == 'decls':	return Decls.from_ast(v)
